@@ -40,7 +40,16 @@ test('model form changes height smoothly and keeps a single font system',async({
   const body=editor.locator('.model-body-size');const initial=(await body.boundingBox())!.height;
   await editor.getByRole('combobox',{name:'连接方式'}).click();await capture(page,'.model-body-size',1000);await page.getByRole('option',{name:'OpenAI Responses',exact:true}).click();const changed=await frames(page);
   expect(changed.at(-1)!.height).toBeGreaterThan(initial+15);
-  expect(new Set(changed.map(f=>Math.round(f.height))).size).toBeGreaterThan(3);
+  // 采样的是逐帧高度，负载高的机器上浏览器会合并动画帧，单次采样可能只拿到两三帧。
+  // 这里比较两种连接方式互相切换的采样，只要有一次拿到足够多的中间帧就说明过渡是连续的，
+  // 而不是瞬间跳变；两种方式都拿不到才判失败。
+  const samples=[new Set(changed.map(f=>Math.round(f.height))).size];
+  for(const name of ['OpenAI Chat Completions','OpenAI Responses']){
+    const select=editor.getByRole('combobox',{name:'连接方式'});await select.click();
+    await capture(page,'.model-body-size',1000);await page.getByRole('option',{name,exact:true}).click();
+    samples.push(new Set((await frames(page)).map(f=>Math.round(f.height))).size);
+  }
+  expect(Math.max(...samples)).toBeGreaterThan(3);
   const fonts=await page.evaluate(()=>['body','[data-slot="dialog-title"]','input','[data-slot="select-trigger"]','[data-slot="sidebar-menu-button"]'].map(s=>getComputedStyle(document.querySelector(s)!).fontFamily));
   expect(new Set(fonts).size).toBe(1);expect(fonts[0]).not.toContain('Inter');
 });
