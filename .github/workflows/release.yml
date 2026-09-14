@@ -136,7 +136,7 @@ jobs:
             --bundles app,dmg \
             --config '{"bundle":{"createUpdaterArtifacts":true}}'
       - name: 校验 bundle 内的 PI 运行时
-        run: node scripts/check-package.mjs --release
+        run: node scripts/check-package.mjs --release --target "$RUST_TARGET"
       - name: 生成更新清单
         id: manifest
         run: |
