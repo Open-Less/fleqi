@@ -20,7 +20,7 @@ Fleqi 的代码、CI 与发布都在 GitHub 上完成，本地负责开发与真
 
 ### 已验证的首次运行
 
-`beta` 上的第一次完整运行（含 PR #1、#2）结果：
+`beta` 上的第一次完整运行结果：
 
 | 工作流 | 结果 | 产物 |
 | --- | --- | --- |
@@ -31,6 +31,30 @@ Fleqi 的代码、CI 与发布都在 GitHub 上完成，本地负责开发与真
 | `Release`（dry run） | 通过（不创建 Release） | `fleqi-release-dry-run-v0.0.1`，196 MB：DMG、`Fleqi_aarch64.app.tar.gz` 与 `.sig`、`latest.json` |
 
 `main` 仍是空的正式分支：第一次真正发版时用 `release/*` 把 `beta` 推过去，工作流文件随之进入默认分支。
+
+### 为什么仓库被重建过
+
+第一天的提交里混进了另一个 GitHub 账号（`trip <trip@users.noreply.github.com>`）的身份，
+起因是提交时沿用了机器上别人留下的 `user.email`。重写历史可以让分支干净，但 GitHub 会**永久保留
+已合并 PR 的 `refs/pull/*/head`**（Git API 删除返回 422），而贡献者统计会把这些保留的提交继续算给
+那个账号：第一版重建后统计里仍留着 `trip` 的 6 个提交（+101 / −21，正好等于 PR #2–#7 六个 head 提交的
+增删行数）。改名、切换默认分支、归档再取消归档都无法让 GitHub 重算这份缓存；唯一彻底的办法是用
+**从未用过的仓库名**新建仓库——新仓库的统计从一开始就只有本人。
+
+因此现在的 `Open-Less/fleqi` 是第三个仓库，路径与之前一致，`main`/`beta`、规则集、Secrets、
+团队权限都已重新配好。前两次的痕迹保留在两个私有归档仓库里：
+
+| 仓库 | 内容 | 处置 |
+| --- | --- | --- |
+| `Open-Less/fleqi-archive` | 第一版：9 个 PR、75 次 Actions 运行 | 不再需要时删除 |
+| `Open-Less/fleqi-old` | 第二版：1 个 PR（身份守卫文档） | 不再需要时删除 |
+
+删除需要 `delete_repo` 权限：`gh auth refresh -h github.com -s delete_repo` 后执行
+`gh repo delete Open-Less/fleqi-archive --yes`。PR 与运行的元数据、五个代表性运行的完整日志已导出到
+`~/.fleqi/archive/fleqi-before-recreate/`，代码与提交历史都在当前仓库里，删掉归档不丢内容。
+
+提交身份现在由 `.githooks/pre-commit` 守卫（邮箱不匹配直接拒绝提交），配置见
+[CONTRIBUTING.md](../../CONTRIBUTING.md)。
 
 ### 冷热路径的取舍
 

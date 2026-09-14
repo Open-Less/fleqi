@@ -119,7 +119,7 @@ GitHub 登录新增令牌方式：OAuth 应用尚未注册时，界面提供「�
 - `pnpm test:core`、`pnpm test:runtime`（9 项）、`swift test --package-path src-tauri/native`（5 项）通过。
 - `cargo clippy --all-targets -- -D warnings` 与 rustfmt 检查通过（此前仓库内有未格式化文件，已一并格式化）。
 - `node scripts/check-commits.mjs` 正例与反例、`node scripts/check-version.mjs v0.0.1` 通过。
-- GitHub Actions（PR #1，全部通过）：`PR conventions`；`CI` 的五项任务——前端构建与类型检查、
+- GitHub Actions（全部通过）：`PR conventions`；`CI` 的五项任务——前端构建与类型检查、
   界面行为测试、核心库测试、PI 运行时测试、桌面端静态检查（rustfmt + 两份 clippy + Swift 单测）；
   `Build Linux and Windows` 的 Linux（deb/AppImage）与 Windows（NSIS）任务均产出安装包。
   首次运行暴露的问题与修法见[仓库与持续集成](../engineering/Repository_and_CI.md#五首次运行暴露并修好的问题)。
