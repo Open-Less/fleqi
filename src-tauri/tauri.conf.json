@@ -86,5 +86,16 @@
         }
       }
     }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Open-Less/fleqi/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY5QjA4MDU5Njc4QzQyQTAKUldTZ1FveG5XWUN3YVZQU0RrVWlKMTdTa1MzYm9kbDFJNFpzWjkzazlpMDRNNFc1UnZMUWxkeWMK",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }
