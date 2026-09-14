@@ -1,0 +1,42 @@
+name: PR conventions
+
+# PR 提交规范门禁：把约定交给机器执行，评审只看内容。
+#   1. PR 标题必须符合 “类型(范围): 主题”，因为 squash 合并会把标题写进主干历史；
+#   2. PR 里的每个提交都必须合规（fixup!/WIP 会被挡下）；
+#   3. 目标分支：日常开发面向 beta；只有 release/* 与 hotfix/* 可以直接面向 main。
+# 规则与 scripts/check-commits.mjs 共用同一份实现，本地可用 pnpm check:commits 预检。
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+    branches: [beta, main]
+
+permissions:
+  contents: read
+
+jobs:
+  conventions:
+    name: 标题、提交与目标分支
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 需要完整历史才能校验 PR 区间内的每个提交。
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: 校验 PR 标题与目标分支
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD: ${{ github.event.pull_request.head.ref }}
+        run: node scripts/check-commits.mjs pr --title "$PR_TITLE" --base "$PR_BASE" --head "$PR_HEAD"
+      - name: 校验 PR 内的提交
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE_SHA" "$HEAD_SHA"
+          node scripts/check-commits.mjs commit --range "$BASE_SHA..$HEAD_SHA"

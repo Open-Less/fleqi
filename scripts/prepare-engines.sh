@@ -6,6 +6,12 @@ FLEQI_BIN="$FLEQI_ROOT/src-tauri/runtime-resources/bin"
 FLEQI_LICENSES="$FLEQI_ROOT/src-tauri/runtime-resources/licenses"
 mkdir -p "$FLEQI_BUILD" "$FLEQI_BIN" "$FLEQI_LICENSES"
 cd "$FLEQI_BUILD"
+# 交叉平台的编译验证与快速 push 构建用这个开关跳过静态引擎编译：产物不具备
+# 媒体转码与 PDF 能力，只能用于验证代码可构建，不能用于分发。发版流程必须完整构建。
+if [[ "${FLEQI_SKIP_ENGINES:-0}" == "1" ]]; then
+  echo 'FLEQI_SKIP_ENGINES=1：跳过 FFmpeg/qpdf 构建，本次产出的应用没有媒体与 PDF 能力。'
+  exit 0
+fi
 if [[ "$(uname -s)" != Darwin ]]; then
   echo 'Build platform-specific FFmpeg/qpdf and place them in runtime-resources/bin before packaging.'
   exit 1

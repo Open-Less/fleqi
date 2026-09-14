@@ -1,0 +1,178 @@
+name: Release
+
+# 发版：推 v* tag 触发。产出 DMG 与自动更新包，写入 GitHub Release，并维护更新通道。
+#
+# 通道规则（由 tag 决定，见 scripts/check-version.mjs）：
+#   v0.0.1            → stable：非 prerelease，资产含 latest.json；
+#                        应用从 releases/latest/download/latest.json 取更新。
+#   v0.0.1-beta.1     → beta：prerelease，资产含 latest-beta.json，并同步刷新
+#                        常驻的 beta 通道 Release（应用从 releases/download/beta/latest-beta.json 取更新）。
+#
+# 发版前必须先把版本号写进 package.json 与 src-tauri/tauri.conf.json（校验会失败并提示）。
+# 手动触发且不填 tag 时是一次「试运行」：完整构建、签名、生成清单，但不创建 Release，
+# 产物以 workflow artifact 形式保留，用于在真正发版前验证流水线。
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 已存在的 tag；留空则按当前分支的版本号试运行一次
+        required: false
+      dry_run:
+        description: 只构建与签名，不创建 Release
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  NODE_VERSION: '24'
+  RUST_TARGET: aarch64-apple-darwin
+  BUNDLE_DIR: src-tauri/target/aarch64-apple-darwin/release/bundle
+
+jobs:
+  release:
+    name: 构建并发布
+    # 需要 Xcode 26+：NSGlassEffectView 只在 macOS 26 SDK 中存在。
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.RUST_TARGET }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: 解析 tag 并校验版本号
+        id: version
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag }}"
+          if [ -z "$tag" ]; then
+            if [ "${{ github.event_name }}" = "push" ]; then
+              tag="${{ github.ref_name }}"
+            else
+              tag="v$(node -p "require('./package.json').version")"
+              echo "::notice::未指定 tag，按当前分支版本试运行：$tag"
+            fi
+          fi
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+          node scripts/check-version.mjs "$tag"
+      - name: 检查更新签名密钥
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            echo "::error::缺少 TAURI_SIGNING_PRIVATE_KEY：没有它就无法生成可验证的更新包，自动更新会失败。配置步骤见 docs/engineering/Release_and_Distribution.md。"
+            exit 1
+          fi
+      - name: 安装依赖
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm --dir runtime/pi install --frozen-lockfile
+      - name: 缓存静态引擎
+        uses: actions/cache@v4
+        with:
+          path: .build/engines
+          key: fleqi-engines-${{ runner.os }}-${{ hashFiles('scripts/prepare-engines.sh') }}
+      # 发版必须构建完整引擎：缺 FFmpeg/qpdf 的应用无法完成媒体与 PDF 任务。
+      - name: 准备运行时资源
+        run: |
+          set -euo pipefail
+          node scripts/prepare-runtime.mjs
+          bash scripts/prepare-engines.sh
+          node scripts/prepare-notices.mjs
+      - name: 打包（含更新签名）
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # 配置了 Developer ID 证书与公证凭据时自动签名并公证；未配置则回退 ad-hoc。
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_CERTIFICATE:-}" ]; then
+            echo "::warning::未配置 Apple 证书：本次产物为 ad-hoc 签名，用户首次打开需在「隐私与安全性」中放行。"
+          fi
+          pnpm exec tauri build --target "$RUST_TARGET" \
+            --bundles app,dmg \
+            --config '{"bundle":{"createUpdaterArtifacts":true}}'
+      - name: 校验 bundle 内的 PI 运行时
+        run: node scripts/check-package.mjs --release
+      - name: 生成更新清单
+        id: manifest
+        run: |
+          set -euo pipefail
+          path=$(node scripts/write-updater-manifest.mjs \
+            --repo "${GITHUB_REPOSITORY}" \
+            --tag "$RELEASE_TAG" \
+            --version "${{ steps.version.outputs.version }}" \
+            --channel "${{ steps.version.outputs.channel }}" \
+            --arch aarch64 \
+            --bundle-dir "$BUNDLE_DIR/macos" \
+            --out-dir "$BUNDLE_DIR/macos")
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+      - name: 试运行产物
+        if: inputs.dry_run
+        uses: actions/upload-artifact@v4
+        with:
+          name: fleqi-release-dry-run-${{ env.RELEASE_TAG }}
+          path: |
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Fleqi_aarch64.app.tar.gz
+            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Fleqi_aarch64.app.tar.gz.sig
+            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/latest*.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: 发布 Release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          prerelease=""
+          if [ "${{ steps.version.outputs.prerelease }}" = "true" ]; then prerelease="--prerelease"; fi
+          gh release create "$RELEASE_TAG" \
+            --title "Fleqi ${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            $prerelease \
+            "$BUNDLE_DIR/dmg/"*.dmg \
+            "$BUNDLE_DIR/macos/Fleqi_aarch64.app.tar.gz" \
+            "$BUNDLE_DIR/macos/Fleqi_aarch64.app.tar.gz.sig" \
+            "${{ steps.manifest.outputs.path }}"
+      # beta 用户需要一个不会变的下载地址：releases/latest 只指向非 prerelease，
+      # 所以这里维护一个常驻的 beta 通道 Release，只放清单文件。
+      - name: 刷新 beta 更新通道
+        if: ${{ !inputs.dry_run && steps.version.outputs.channel == 'beta' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view beta >/dev/null 2>&1; then
+            gh release create beta --prerelease --title "Beta 更新通道" \
+              --notes "测试版自动更新清单。应用读取本 Release 下的 latest-beta.json，请勿删除。" \
+              --target "$(git rev-parse HEAD)"
+          fi
+          gh release upload beta "$BUNDLE_DIR/macos/latest-beta.json" --clobber

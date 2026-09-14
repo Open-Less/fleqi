@@ -57,7 +57,7 @@ pub async fn app_snapshot(state: State<'_, AppState>) -> Reply<Value> {
         let node=state.0.resources.join("bin").join(if cfg!(windows){"node.exe"}else{"node"});
         platform::auto_probe_permissions();
         let context=state.0.context.lock().map_err(|_|"上下文不可用")?.clone();
-        Ok(json!({"settings":state.0.db.settings().map_err(|e|e.to_string())?,"profiles":profiles,"permissions":NativeHost.permissions().map_err(|e|e.to_string())?,"platform":NativeHost.capabilities(),"runtime":{"ready":node.is_file()&&state.0.pi_dir.join("entry.mjs").is_file(),"node":"24.21.0","pi":"0.85.0","app":env!("CARGO_PKG_VERSION")},"engines":engines,"tasks":state.0.db.tasks(100).map_err(|e|e.to_string())?,"context":context,"interactions":state.interaction_list(),"auth":state.0.auth.lock().ok().and_then(|v|v.clone()),"github":crate::github::status(),"update":{"configured":crate::update::configured(),"repository":null},"activeTaskId":state.active_id(),"native":true}))
+        Ok(json!({"settings":state.0.db.settings().map_err(|e|e.to_string())?,"profiles":profiles,"permissions":NativeHost.permissions().map_err(|e|e.to_string())?,"platform":NativeHost.capabilities(),"runtime":{"ready":node.is_file()&&state.0.pi_dir.join("entry.mjs").is_file(),"node":"24.21.0","pi":"0.85.0","app":env!("CARGO_PKG_VERSION")},"engines":engines,"tasks":state.0.db.tasks(100).map_err(|e|e.to_string())?,"context":context,"interactions":state.interaction_list(),"auth":state.0.auth.lock().ok().and_then(|v|v.clone()),"github":crate::github::status(),"update":crate::update::info(),"activeTaskId":state.active_id(),"native":true}))
     }).await.map_err(|e|e.to_string())?
 }
 #[tauri::command]
@@ -365,7 +365,11 @@ pub async fn profile_run(
     result
 }
 #[tauri::command]
-pub async fn auth_open(app: AppHandle, state: State<'_, AppState>, url: Option<String>) -> Reply<()> {
+pub async fn auth_open(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    url: Option<String>,
+) -> Reply<()> {
     let stored = state
         .0
         .auth
@@ -394,6 +398,16 @@ pub async fn github_login_poll(app: AppHandle) -> Reply<Value> {
     Ok(result)
 }
 #[tauri::command]
+pub async fn github_login_token(app: AppHandle, token: String) -> Reply<Value> {
+    let result = crate::github::login_token(&token).await?;
+    runtime::changed(&app);
+    Ok(result)
+}
+#[tauri::command]
+pub async fn github_open_tokens(app: AppHandle) -> Reply<()> {
+    crate::github::open_tokens(&app)
+}
+#[tauri::command]
 pub async fn github_logout(app: AppHandle) -> Reply<()> {
     crate::github::logout()?;
     runtime::changed(&app);
@@ -409,12 +423,7 @@ pub async fn update_install(app: AppHandle) -> Reply<Value> {
 }
 #[tauri::command]
 pub async fn context_clear(app: AppHandle, state: State<'_, AppState>) -> Reply<()> {
-    let cleared = state
-        .0
-        .context
-        .lock()
-        .map_err(|_| "上下文不可用")?
-        .take();
+    let cleared = state.0.context.lock().map_err(|_| "上下文不可用")?.take();
     if let Some(context) = cleared {
         if let Ok(mut dismissed) = state.0.dismissed.lock() {
             *dismissed = Some(selection_signature(&context));
@@ -482,10 +491,7 @@ pub async fn permissions_request(
     app_snapshot(state).await
 }
 #[tauri::command]
-pub async fn permissions_check(
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Reply<Value> {
+pub async fn permissions_check(app: AppHandle, state: State<'_, AppState>) -> Reply<Value> {
     tokio::task::spawn_blocking(|| {
         platform::run_probe("files");
         platform::run_probe("full_disk");
@@ -663,7 +669,12 @@ pub async fn task_submit(
         // Finder 在焦点切换的瞬间可能向 AppleScript 报告空选区。若提交时
         // 捕获为空、而最近一次探测确实带文件且目录一致，则采用那次记录。
         if fresh.files.is_empty() {
-            let last = state.0.last_selection.lock().map_err(|_| "上下文不可用")?.clone();
+            let last = state
+                .0
+                .last_selection
+                .lock()
+                .map_err(|_| "上下文不可用")?
+                .clone();
             if let Some(last) = last {
                 let recent = now_ms().saturating_sub(last.captured_at) <= 10 * 60 * 1000;
                 if recent && last.directory == fresh.directory {
@@ -1008,7 +1019,11 @@ pub async fn bar_toggle(app: AppHandle, state: State<'_, AppState>, show: bool) 
     Ok(())
 }
 #[tauri::command]
-pub async fn bar_resize(height: f64, bar_height: Option<f64>, bar_offset: Option<f64>) -> Reply<Value> {
+pub async fn bar_resize(
+    height: f64,
+    bar_height: Option<f64>,
+    bar_offset: Option<f64>,
+) -> Reply<Value> {
     platform::host_call(json!({
         "operation": "height",
         "height": height,

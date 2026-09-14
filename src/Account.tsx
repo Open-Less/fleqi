@@ -5,11 +5,13 @@ import { Dialog,DialogContent,DialogDescription,DialogTitle } from './components
 import { AssetIcon } from './icons';
 import { backend,type FleqiController } from './backend';
 
-/** GitHub 账号：设备码登录，令牌只存系统凭据，界面只显示账号信息。 */
+/** GitHub 账号：优先设备码登录；未注册 OAuth 应用时用个人访问令牌兜底。令牌只进系统凭据。 */
 export function GithubAccount({controller:c,compact=false}:{controller:FleqiController;compact?:boolean}) {
   const github=c.snapshot?.github;
   const account=github?.account??null;
+  const mode=github?.mode??'token';
   const [flow,setFlow]=useState<{userCode:string;verificationUri:string;interval:number}|null>(null);
+  const [token,setToken]=useState('');
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState<string|null>(null);
   useEffect(()=>{
@@ -27,18 +29,25 @@ export function GithubAccount({controller:c,compact=false}:{controller:FleqiCont
     return()=>{stopped=true;clearTimeout(timer);};
   },[flow?.userCode]);
   const start=async()=>{if(busy)return;setBusy(true);setMessage(null);try{const started=await backend<{userCode:string;verificationUri:string;interval:number}>('github_login_start');setFlow(started);}catch(error){setMessage(String(error));}finally{setBusy(false);}};
+  const submitToken=async()=>{if(busy||!token.trim())return;setBusy(true);setMessage(null);try{await backend('github_login_token',{token:token.trim()});setToken('');setMessage('已通过 GitHub 登录');await c.refresh();}catch(error){setMessage(String(error));}finally{setBusy(false);}};
+  const openTokens=async()=>{try{await backend('github_open_tokens');}catch(error){setMessage(String(error));}};
   const logout=async()=>{setMessage(null);await c.run('github_logout',undefined,'已退出 GitHub 账号');};
   const copy=async()=>{if(!flow)return;try{await navigator.clipboard.writeText(flow.userCode);setMessage('设备码已复制');}catch{setMessage('复制失败，请手动输入设备码');}};
-  if(!github?.configured){
-    return <div className={compact?'account-block compact':'account-block'}>
-      <div className="account-line"><AssetIcon name="customLink" size={16}/><span>GitHub 未配置</span></div>
-      <p className="account-hint">创建 GitHub OAuth 应用并填写客户端 ID 后即可登录；步骤见 docs/GitHub_and_Updates.md。</p>
-    </div>;
-  }
   if(account?.loggedIn){
     return <div className={compact?'account-block compact':'account-block'}>
       <div className="account-line">{account.avatarUrl?<img className="account-avatar" src={account.avatarUrl} alt=""/>:<AssetIcon name="customLink" size={16}/>}<span className="truncate">{account.name||account.login}</span></div>
       <div className="account-actions"><span className="account-hint">已通过 GitHub 登录</span><Button size="sm" variant="ghost" onClick={()=>void logout()}>退出</Button></div>
+    </div>;
+  }
+  if(mode==='token'){
+    return <div className={compact?'account-block compact':'account-block'}>
+      <div className="account-line"><AssetIcon name="customLink" size={16}/><span>GitHub 账号</span></div>
+      <p className="account-hint">在 GitHub 上生成一个只读用户信息的令牌后粘贴到下面。令牌只写入系统钥匙串，不进入设置文件与诊断信息。</p>
+      <div className="account-token">
+        <Input type="password" value={token} aria-label="GitHub 访问令牌" placeholder="ghp_… 或 github_pat_…" onChange={event=>setToken(event.target.value)} onKeyDown={event=>{if(event.key==='Enter')void submitToken();}}/>
+        <Button size="sm" disabled={busy||!token.trim()} onClick={()=>void submitToken()}>{busy?'正在验证…':'登录'}</Button>
+      </div>
+      <div className="account-actions"><Button size="sm" variant="ghost" onClick={()=>void openTokens()}>打开 GitHub 令牌页</Button>{message&&<span className="account-hint">{message}</span>}</div>
     </div>;
   }
   return <div className={compact?'account-block compact':'account-block'}>
@@ -59,10 +68,11 @@ export function UpdateDialog({controller:c}:{controller:FleqiController}) {
   const open=!!update||!!progress;
   if(!open)return null;
   const phase=progress?.phase??'prompt';
+  const channel=c.snapshot?.update.channel??'stable';
   return <Dialog open onOpenChange={value=>{if(!value)c.dismissUpdate();}}>
     <DialogContent className="update-dialog sm:max-w-md" showCloseButton={!c.updateBusy}>
       <DialogTitle>{phase==='prompt'?'发现新版本':'正在更新'}</DialogTitle>
-      <DialogDescription>{phase==='prompt'?`新版本 ${update?.version??''} 已发布，更新会覆盖当前应用并自动重启。`:'下载完成后应用会自动重启，凭据与设置都会保留。'}</DialogDescription>
+      <DialogDescription>{phase==='prompt'?`${channel==='beta'?'测试通道':'正式通道'}的新版本 ${update?.version??''} 已发布，更新会覆盖当前应用并自动重启。`:'下载完成后应用会自动重启，凭据与设置都会保留。'}</DialogDescription>
       {phase==='prompt'&&update?.notes&&<div className="update-notes">{update.notes}</div>}
       {phase!=='prompt'&&<div className="update-progress" role="progressbar" aria-valuenow={percent??undefined} aria-valuemin={0} aria-valuemax={100}>
         <span style={{width:percent!=null?`${percent}%`:'35%'}}/>

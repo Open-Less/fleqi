@@ -649,19 +649,18 @@ impl FileExecutor {
                 result.completed = sources.len();
             }
         }
-        if let Some(limit) = action.max_bytes {
-            if result
+        if let Some(limit) = action.max_bytes
+            && result
                 .outputs
                 .iter()
                 .any(|p| fs::metadata(p).is_ok_and(|m| m.is_file() && m.len() > limit))
-            {
-                result.verified = false;
-                if !result.details.is_object() {
-                    result.details = serde_json::json!({});
-                }
-                result.details["goalMet"] = serde_json::json!(false);
-                result.details["maxBytes"] = serde_json::json!(limit);
+        {
+            result.verified = false;
+            if !result.details.is_object() {
+                result.details = serde_json::json!({});
             }
+            result.details["goalMet"] = serde_json::json!(false);
+            result.details["maxBytes"] = serde_json::json!(limit);
         }
         Ok(result)
     }

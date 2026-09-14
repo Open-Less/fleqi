@@ -4,6 +4,8 @@ Fleqi 在 Finder 下方提供文件任务输入栏，并通过 macOS 菜单栏�
 
 主页使用 shadcn `sidebar-07`，设置使用 `sidebar-13` 的弹窗结构。核心配色为灰、黑、白，图标来自 `src/assets/icons/`（由 `src/icons.tsx` 统一引用），输入框使用单色 Border Beam。概览固定一屏，任务等分区独立滚动。
 
+代码在 <https://github.com/Open-Less/fleqi>，开发在 `beta` 分支，`main` 只承载正式版本；提交与 PR 规范由 CI 强制校验，细则见[贡献指南](CONTRIBUTING.md)。
+
 ## 运行
 
 ```sh
@@ -57,8 +59,11 @@ cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 ## 文档与代码
 
 - [文档索引](docs/README.md)
+- [贡献指南](CONTRIBUTING.md)
 - [需求基线](docs/product/Fleqi_PRD_v0.0.1_Final.md)
 - [架构与准备图](docs/engineering/P0_Architecture_and_Preparation.md)
+- [仓库与持续集成](docs/engineering/Repository_and_CI.md)
+- [发布与分发](docs/engineering/Release_and_Distribution.md)
 - [GitHub 与自动更新](docs/engineering/GitHub_and_Updates.md)
 - [UI 规范与截图](docs/design/P0_UI_Spec.md)
 - [P0 验收记录](docs/qa/P0_Acceptance.md)

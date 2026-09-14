@@ -1,0 +1,93 @@
+name: Build macOS
+
+# 构建 CI：每次推送到 beta / main 都产出一个可安装的 macOS 应用包，用来尽早发现
+# 只在真实打包路径上才暴露的问题（bundle 资源清单、Info.plist、Swift 链接、图标）。
+#
+# 默认不带 FFmpeg/qpdf 静态引擎（编译一次要几十分钟），因此默认产物只能用于验证
+# 与内部试用，不能分发。需要完整产物时手动触发并勾选 with_engines。
+# 正式发版走 release.yml，它始终构建完整引擎并做更新签名。
+
+on:
+  push:
+    branches: [beta, main]
+  workflow_dispatch:
+    inputs:
+      with_engines:
+        description: 同时构建 FFmpeg/qpdf 静态引擎（耗时长，首次约 30-60 分钟）
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  NODE_VERSION: '24'
+  # 产品只支持 Apple Silicon（见 docs/product/Fleqi_PRD_v0.0.1_Final.md）。
+  RUST_TARGET: aarch64-apple-darwin
+
+jobs:
+  bundle:
+    name: 打包 macOS 应用
+    # 需要 Xcode 26+：NSGlassEffectView 只在 macOS 26 SDK 中存在。
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.RUST_TARGET }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: 安装依赖
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm --dir runtime/pi install --frozen-lockfile
+      # 引擎源码与中间产物很大，缓存后只有脚本变化时才会重编。
+      - name: 缓存静态引擎
+        if: github.event_name == 'workflow_dispatch' && inputs.with_engines
+        uses: actions/cache@v4
+        with:
+          path: .build/engines
+          key: fleqi-engines-${{ runner.os }}-${{ hashFiles('scripts/prepare-engines.sh') }}
+      # 顺序不能变：资源写入完成前 Tauri 不能开始遍历 bundle 目录。
+      - name: 准备运行时资源
+        run: |
+          set -euo pipefail
+          node scripts/prepare-runtime.mjs
+          if [ "${{ github.event_name == 'workflow_dispatch' && inputs.with_engines }}" = "true" ]; then
+            bash scripts/prepare-engines.sh
+          else
+            FLEQI_SKIP_ENGINES=1 bash scripts/prepare-engines.sh
+          fi
+          node scripts/prepare-notices.mjs
+      - name: 打包（debug，跳过 DMG 签名步骤）
+        env:
+          # 未配置 Apple 证书时回退 ad-hoc 签名；CI 产物不用于分发，因此可以接受。
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: pnpm exec tauri build --debug --target "$RUST_TARGET" --bundles app
+      - name: 校验 bundle 内的 PI 运行时
+        if: github.event_name == 'workflow_dispatch' && inputs.with_engines
+        run: pnpm test:package
+      - name: 归档应用包
+        run: |
+          set -euo pipefail
+          app="src-tauri/target/$RUST_TARGET/debug/bundle/macos/Fleqi.app"
+          test -d "$app"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "Fleqi-${{ github.sha }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fleqi-macos-debug-${{ github.sha }}
+          path: Fleqi-${{ github.sha }}.zip
+          retention-days: 14
+          if-no-files-found: error

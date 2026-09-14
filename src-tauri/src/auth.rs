@@ -50,10 +50,7 @@ pub fn prompt_copy(prompt: &Value) -> (String, Value) {
                                 let label = match id.as_str() {
                                     "browser" => "浏览器登录（推荐）".to_string(),
                                     "device_code" => "设备码登录（无浏览器）".to_string(),
-                                    _ => item["label"]
-                                        .as_str()
-                                        .unwrap_or(id.as_str())
-                                        .to_string(),
+                                    _ => item["label"].as_str().unwrap_or(id.as_str()).to_string(),
                                 };
                                 json!({"id":id,"label":label})
                             })

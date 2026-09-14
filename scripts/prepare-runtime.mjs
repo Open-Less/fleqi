@@ -32,8 +32,19 @@ try { data = await readFile(archive); } catch {
   await writeFile(archive, data);
 }
 if (createHash('sha256').update(data).digest('hex') !== checksum) throw new Error('Node archive checksum mismatch');
-if (extension === 'zip') execFileSync('tar', ['-xf', archive, '-C', cache]);
-else execFileSync('tar', ['-xzf', archive, '-C', cache]);
+// 解压方式按平台分开：Windows 的发布包是 zip，而 Windows 上 PATH 里的 tar 是 Git 自带的
+// GNU tar，只认 tar 格式（会报 “This does not look like a tar archive”），改用系统自带的
+// Expand-Archive。其余平台把路径换成相对路径再从仓库根执行：Windows 盘符的冒号会被
+// GNU tar 当成远程主机（tar: Cannot connect to D: resolve failed）。
+const relative = value => path.relative(root, value).split(path.sep).join('/');
+if (platform === 'win') {
+  const literal = value => value.replaceAll("'", "''");
+  execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', `Expand-Archive -LiteralPath '${literal(archive)}' -DestinationPath '${literal(cache)}' -Force`]);
+} else if (extension === 'zip') {
+  execFileSync('tar', ['-xf', relative(archive), '-C', relative(cache)], { cwd: root });
+} else {
+  execFileSync('tar', ['-xzf', relative(archive), '-C', relative(cache)], { cwd: root });
+}
 const binary = platform === 'win' ? 'node.exe' : 'node';
 await copyFile(path.join(cache, name, ...(platform === 'win' ? [] : ['bin']), binary), path.join(resources, 'bin', binary));
 await chmod(path.join(resources, 'bin', binary), 0o755);
@@ -46,7 +57,9 @@ await cp(source, path.join(resources, 'pi'), { recursive: true, verbatimSymlinks
 // Tauri's resource walker omits pnpm directory symlinks. Preserve the complete
 // dependency graph in an archive and let Rust unpack it into an owned cache.
 const piArchive=path.join(resources,'pi.tar.gz');
-execFileSync('tar',['-czf',piArchive,'--exclude=./test','-C',path.join(resources,'pi'),'.'],{env:{...process.env,COPYFILE_DISABLE:'1'}});
+// 同样用相对路径：Windows 上把绝对路径交给 GNU tar 会被盘符冒号与反斜杠转义搞坏
+// （tar: D\:\\a\\... Cannot write: Broken pipe）。
+execFileSync('tar',['-czf',relative(piArchive),'--exclude=./test','-C',relative(path.join(resources,'pi')),'.'],{cwd:root,env:{...process.env,COPYFILE_DISABLE:'1'}});
 const piArchiveSha256=createHash('sha256').update(await readFile(piArchive)).digest('hex');
 await writeFile(path.join(resources, 'runtime-manifest.json'), JSON.stringify({ node: version, pi: '0.85.0', target, piArchiveSha256 }, null, 2));
 console.log(`Bundled runtime prepared: ${target}`);

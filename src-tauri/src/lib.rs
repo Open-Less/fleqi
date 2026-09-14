@@ -131,6 +131,8 @@ pub fn run() {
             commands::github_status,
             commands::github_login_start,
             commands::github_login_poll,
+            commands::github_login_token,
+            commands::github_open_tokens,
             commands::github_logout,
             commands::update_check,
             commands::update_install,

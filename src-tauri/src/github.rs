@@ -19,6 +19,9 @@ const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
 const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
 const USER_URL: &str = "https://api.github.com/user";
 const VERIFY_URL: &str = "https://github.com/login/device";
+/// 令牌创建页，已预填只读用户信息所需的最小权限。
+const TOKENS_URL: &str =
+    "https://github.com/settings/tokens/new?scopes=read:user&description=Fleqi";
 static FLOW: Mutex<Option<Flow>> = Mutex::new(None);
 
 struct Flow {
@@ -29,6 +32,11 @@ struct Flow {
 
 pub fn configured() -> bool {
     !CLIENT_ID.is_empty()
+}
+
+/// 登录方式：配好 OAuth 应用走设备码；否则界面提供令牌登录兜底。
+pub fn mode() -> &'static str {
+    if configured() { "device" } else { "token" }
 }
 
 /// 只允许 https 且主机名完全等于白名单条目的地址，其他一律拒绝。
@@ -52,7 +60,9 @@ fn client() -> Result<reqwest::Client, String> {
 }
 
 fn stored() -> Option<Value> {
-    crate::platform::credential("read", ACCOUNT, None).ok().filter(|v| !v.is_null())
+    crate::platform::credential("read", ACCOUNT, None)
+        .ok()
+        .filter(|v| !v.is_null())
 }
 
 pub fn status() -> Value {
@@ -69,8 +79,26 @@ pub fn status() -> Value {
         });
     json!({
         "configured": configured(),
+        "mode": mode(),
         "account": account.unwrap_or(Value::Null),
     })
+}
+
+/// 访问令牌只写入系统凭据存储；除登录名与头像外不落盘、不进日志。
+fn store(token: &str, account: &Value) -> Result<(), String> {
+    crate::platform::credential(
+        "write",
+        ACCOUNT,
+        Some(json!({
+            "token": token,
+            "login": account["login"],
+            "name": account["name"],
+            "avatarUrl": account["avatarUrl"],
+            "htmlUrl": account["htmlUrl"],
+        })),
+    )
+    .map(|_| ())
+    .map_err(|e| e.to_string())
 }
 
 pub fn logout() -> Result<(), String> {
@@ -96,12 +124,21 @@ pub async fn login_start(app: &tauri::AppHandle) -> Result<Value, String> {
         .await
         .map_err(|error| format!("无法连接 GitHub：{error}"))?;
     if !response.status().is_success() {
-        return Err(format!("GitHub 拒绝了设备码请求（HTTP {}）", response.status()));
+        return Err(format!(
+            "GitHub 拒绝了设备码请求（HTTP {}）",
+            response.status()
+        ));
     }
     let body: Value = response.json().await.map_err(|e| e.to_string())?;
-    let device_code = body["device_code"].as_str().ok_or("GitHub 未返回设备码")?.to_string();
+    let device_code = body["device_code"]
+        .as_str()
+        .ok_or("GitHub 未返回设备码")?
+        .to_string();
     let user_code = body["user_code"].as_str().unwrap_or("").to_string();
-    let verification = body["verification_uri"].as_str().unwrap_or(VERIFY_URL).to_string();
+    let verification = body["verification_uri"]
+        .as_str()
+        .unwrap_or(VERIFY_URL)
+        .to_string();
     let interval = body["interval"].as_u64().unwrap_or(5).clamp(1, 60);
     let expires = body["expires_in"].as_u64().unwrap_or(900).clamp(60, 3600);
     if let Ok(mut flow) = FLOW.lock() {
@@ -153,18 +190,7 @@ pub async fn login_poll() -> Result<Value, String> {
     let body: Value = response.json().await.map_err(|e| e.to_string())?;
     if let Some(token) = body["access_token"].as_str() {
         let account = fetch_account(token).await?;
-        crate::platform::credential(
-            "write",
-            ACCOUNT,
-            Some(json!({
-                "token": token,
-                "login": account["login"],
-                "name": account["name"],
-                "avatarUrl": account["avatarUrl"],
-                "htmlUrl": account["htmlUrl"],
-            })),
-        )
-        .map_err(|e| e.to_string())?;
+        store(token, &account)?;
         if let Ok(mut flow) = FLOW.lock() {
             *flow = None;
         }
@@ -211,4 +237,34 @@ async fn fetch_account(token: &str) -> Result<Value, String> {
         "avatarUrl": body["avatar_url"].as_str().unwrap_or(""),
         "htmlUrl": body["html_url"].as_str().unwrap_or(""),
     }))
+}
+
+/// 备用登录：直接用个人访问令牌换取账号信息。
+///
+/// 设备码流程需要先在 GitHub 上注册 OAuth 应用并启用 device flow，属于仓库
+/// 管理员的线下动作；在拿到 client id 之前，这条路径让登录功能可以完整跑通。
+/// 令牌同样只进系统凭据存储，且必须先通过一次 api.github.com/user 校验。
+pub async fn login_token(token: &str) -> Result<Value, String> {
+    let token = token.trim();
+    if token.len() < 20
+        || token.len() > 255
+        || token.chars().any(|c| c.is_control() || c.is_whitespace())
+    {
+        return Err("令牌格式不正确：请粘贴 GitHub 生成的完整令牌".into());
+    }
+    let account = fetch_account(token).await?;
+    if account["login"].as_str().unwrap_or("").is_empty() {
+        return Err("该令牌无法读取账号信息，请确认令牌未被撤销且包含 read:user 权限".into());
+    }
+    store(token, &account)?;
+    Ok(json!({"status": "authorized", "login": account["login"]}))
+}
+
+/// 在浏览器打开令牌创建页（预填 read:user），省去用户自己找入口。
+pub fn open_tokens(app: &tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let url = allowed(TOKENS_URL, &["github.com"])?;
+    app.opener()
+        .open_url(url.to_string(), None::<&str>)
+        .map_err(|error| format!("无法打开浏览器：{error}"))
 }

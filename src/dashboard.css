@@ -63,6 +63,8 @@ html[data-surface='settings'],html[data-surface='settings'] body,html[data-surfa
 .account-hint {font-size:11px;line-height:1.7;color:var(--muted-foreground);}
 .account-actions {display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .account-flow {display:flex;flex-direction:column;gap:8px;}
+.account-token {display:flex;align-items:center;gap:8px;}
+.account-token input {flex:1;}
 .account-code {display:flex;align-items:center;gap:8px;}
 .account-code code {flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;letter-spacing:.14em;text-align:center;user-select:text;}
 /* 关于与更新 */

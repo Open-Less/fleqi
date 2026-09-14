@@ -1,0 +1,139 @@
+name: CI
+
+# 质量门禁：推送到 beta / main，以及所有面向它们的 PR，都必须通过这套快速检查。
+# 桌面打包在 build-macos.yml 与 build-cross-platform.yml，发版在 release.yml。
+# 本地等价命令：pnpm build / pnpm test / pnpm test:core / pnpm test:runtime。
+
+on:
+  push:
+    branches: [beta, main]
+  pull_request:
+    branches: [beta, main]
+  workflow_dispatch:
+
+# 同一个 PR 反复推送时取消旧运行；workflow_dispatch 用 run_id 隔离，避免互相取消。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # 与打包进应用的 Node 运行时（prepare-runtime.mjs 固定 24.x）保持同一条主版本线。
+  NODE_VERSION: '24'
+
+jobs:
+  web:
+    name: 前端构建与类型检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      - name: 类型检查与打包（tsc --noEmit && vite build）
+        run: pnpm build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fleqi-web-dist
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
+
+  web-tests:
+    name: 界面行为测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      # 用例覆盖视口约束、键盘与输入法、设置、主题几何，跑的是真实 Chrome（与本地一致）。
+      - name: 准备 Chrome
+        run: pnpm exec playwright install --with-deps chrome
+      - name: 运行 Playwright
+        run: pnpm test
+      - name: 上传失败现场
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  core:
+    name: 核心库测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/fleqi-core
+      # 持久化与受限文件执行是纯 Rust 逻辑，不需要 macOS 就能验证。
+      - name: 持久化与受限文件执行
+        run: cargo test --manifest-path crates/fleqi-core/Cargo.toml
+
+  runtime:
+    name: PI 运行时测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: runtime/pi/pnpm-lock.yaml
+      - name: 安装运行时依赖
+        run: pnpm --dir runtime/pi install --frozen-lockfile
+      - name: 本地协议与桥接夹具
+        run: pnpm test:runtime
+
+  desktop:
+    name: 桌面端静态检查
+    # 需要 Xcode 26+：液态玻璃走 NSGlassEffectView，只有 macOS 26 SDK 才有该符号。
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      # Tauri 的构建脚本会检查 tauri.conf.json 里声明的 bundle 资源是否存在，而这些资源
+      # 是 prepare-runtime.mjs 生成的（不入库）。静态检查不需要真实内容，占位即可；
+      # build-macos.yml 与 release.yml 走完整生成流程。
+      - name: 占位运行时资源
+        run: |
+          set -euo pipefail
+          mkdir -p src-tauri/runtime-resources/bin src-tauri/runtime-resources/licenses
+          : > src-tauri/runtime-resources/pi.tar.gz
+          echo '{}' > src-tauri/runtime-resources/runtime-manifest.json
+      - name: 格式检查
+        run: |
+          set -euo pipefail
+          cargo fmt --manifest-path crates/fleqi-core/Cargo.toml -- --check
+          cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      - name: Clippy（警告即失败）
+        run: |
+          set -euo pipefail
+          cargo clippy --manifest-path crates/fleqi-core/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      # 原生贴合几何（AttachmentGeometry）与窗口动画是黑盒测试不到的，单独跑 Swift 单测。
+      - name: Swift 原生几何单测
+        run: swift test --package-path src-tauri/native

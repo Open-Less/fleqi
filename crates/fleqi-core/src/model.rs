@@ -58,15 +58,15 @@ impl SettingsSnapshot {
         {
             return Err(Error::Invalid("设置值无效".into()));
         }
-        if let Some(path) = &self.output_directory {
-            if !std::path::Path::new(path).is_dir() {
-                return Err(Error::Invalid("输出目录不存在".into()));
-            }
+        if let Some(path) = &self.output_directory
+            && !std::path::Path::new(path).is_dir()
+        {
+            return Err(Error::Invalid("输出目录不存在".into()));
         }
-        if let Some(seconds) = self.bubble_seconds {
-            if !seconds.is_finite() || !(1.0..=30.0).contains(&seconds) {
-                return Err(Error::Invalid("气泡显示时长无效".into()));
-            }
+        if let Some(seconds) = self.bubble_seconds
+            && (!seconds.is_finite() || !(1.0..=30.0).contains(&seconds))
+        {
+            return Err(Error::Invalid("气泡显示时长无效".into()));
         }
         Ok(())
     }

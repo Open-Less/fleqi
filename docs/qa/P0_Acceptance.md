@@ -90,3 +90,37 @@ PI 的四类协议测试使用本地测试服务和测试用凭据，没有调�
 - `pnpm test` Playwright 19 项通过（含新增的设置搜索用例）。
 - `pnpm test:runtime` 9 项通过。
 - `cargo clippy -D warnings` 与 `swift test`（5 项）通过。
+
+## 仓库工程化、GitHub 登录与更新通道（本轮）
+
+仓库落到 `Open-Less/fleqi`，项目团队 `@Open-Less/fleqi` 拥有 Write 权限。分支模型
+固定为 `main`（正式版，只接收 `release/*` 与 `hotfix/*`）与 `beta`（开发主干），
+两者都启用了规则集：必须走 PR、必须通过门禁检查、禁止强推与删除。
+
+CI 由四个工作流组成：质量门禁（前端构建与类型检查、Playwright、核心库、PI 运行时、
+Rust fmt/clippy、Swift 单测）、macOS 打包、Linux 与 Windows 构建、tag 发版。
+提交与 PR 规范由 `scripts/check-commits.mjs` 统一执行，本地可用 `.githooks/commit-msg`
+预检，PR 标题、区间内每个提交与目标分支都会被校验。
+
+GitHub 登录新增令牌方式：OAuth 应用尚未注册时，界面提供「打开 GitHub 令牌页」与
+令牌输入框，令牌先经 `api.github.com/user` 校验再写入系统钥匙串；注册 OAuth 应用并
+填入 Client ID 后自动切换到设备码流程。自动更新填入仓库常量 `Open-Less/fleqi`、签名
+公钥与通道选择（正式版读 `latest.json`，`-beta` 版本读常驻 `beta` 通道的
+`latest-beta.json`），签名私钥与口令已写入仓库 Secrets，位置见
+[发布与分发](../engineering/Release_and_Distribution.md)。
+
+需要在真机上复验的项目：令牌登录后重启应用仍保持登录、真实 GitHub 账号的设备码流程
+（需先注册 OAuth 应用）、从旧版本升级到新版本的完整更新流程（需先发出第一个 Release）。
+
+### 本轮自动化验证
+
+- `pnpm build`（tsc + vite）通过。
+- `pnpm test` Playwright 19 项通过；修复了令牌输入框字体破坏「单一字体系统」约束的问题。
+- `pnpm test:core`、`pnpm test:runtime`（9 项）、`swift test --package-path src-tauri/native`（5 项）通过。
+- `cargo clippy --all-targets -- -D warnings` 与 rustfmt 检查通过（此前仓库内有未格式化文件，已一并格式化）。
+- `node scripts/check-commits.mjs` 正例与反例、`node scripts/check-version.mjs v0.0.1` 通过。
+- GitHub Actions（PR #1，全部通过）：`PR conventions`；`CI` 的五项任务——前端构建与类型检查、
+  界面行为测试、核心库测试、PI 运行时测试、桌面端静态检查（rustfmt + 两份 clippy + Swift 单测）；
+  `Build Linux and Windows` 的 Linux（deb/AppImage）与 Windows（NSIS）任务均产出安装包。
+  首次运行暴露的问题与修法见[仓库与持续集成](../engineering/Repository_and_CI.md#五首次运行暴露并修好的问题)。
+- `Build macOS` 与 `Release` 在合并进 `beta` 后才会触发，结果补记在下一轮验收。

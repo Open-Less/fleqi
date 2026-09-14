@@ -298,9 +298,7 @@ pub async fn run(
                     }
                     "progress" => {
                         info["message"] = json!(scrub(
-                            crate::auth::progress_copy(
-                                info["message"].as_str().unwrap_or("")
-                            ),
+                            crate::auth::progress_copy(info["message"].as_str().unwrap_or("")),
                             &secrets
                         ));
                     }
@@ -321,16 +319,8 @@ pub async fn run(
                 let prompt = event["prompt"].clone();
                 let (message, options) = crate::auth::prompt_copy(&prompt);
                 prompts.push(tokio::spawn(async move {
-                    let answer = ask(
-                        app,
-                        state,
-                        "auth".into(),
-                        message,
-                        None,
-                        options,
-                        cancelled,
-                    )
-                    .await;
+                    let answer =
+                        ask(app, state, "auth".into(), message, None, options, cancelled).await;
                     let response = match answer {
                         Ok(value) => json!({"id":id,"result":value}),
                         Err(error) => json!({"id":id,"error":error}),

@@ -33,14 +33,21 @@ impl HostAdapter for NativeHost {
     fn permissions(&self) -> Result<Vec<PermissionItem>> {
         #[cfg(target_os = "macos")]
         {
-            let mut items: Vec<PermissionItem> = serde_json::from_value(host_call(
-                json!({"operation":"permissions"}),
-            )?)?;
+            let mut items: Vec<PermissionItem> =
+                serde_json::from_value(host_call(json!({"operation":"permissions"}))?)?;
             let stored = probes::stored();
             for item in &mut items {
                 match item.id.as_str() {
-                    "files" => if let Some(probed) = &stored.files { *item = probed.clone(); },
-                    "full_disk" => if let Some(probed) = &stored.full_disk { *item = probed.clone(); },
+                    "files" => {
+                        if let Some(probed) = &stored.files {
+                            *item = probed.clone();
+                        }
+                    }
+                    "full_disk" => {
+                        if let Some(probed) = &stored.full_disk {
+                            *item = probed.clone();
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -165,16 +172,31 @@ pub mod probes {
                     .map(|folder| folder_readable(home.join(folder)));
                 let granted = checked.iter().filter(|ok| **ok).count();
                 match granted {
-                    3 => Some(files_item("granted", "桌面、文稿与下载均已授权，可直接读取这些位置的文件")),
-                    0 => Some(files_item("not_granted", "尚未授权受保护文件夹；检查时系统会逐项弹出授权请求，允许后条目会出现在系统“文件与文件夹”列表")),
-                    _ => Some(files_item("partial", "部分受保护文件夹已授权；其余位置可重新检查并在弹窗中允许，或到系统设置手动打开")),
+                    3 => Some(files_item(
+                        "granted",
+                        "桌面、文稿与下载均已授权，可直接读取这些位置的文件",
+                    )),
+                    0 => Some(files_item(
+                        "not_granted",
+                        "尚未授权受保护文件夹；检查时系统会逐项弹出授权请求，允许后条目会出现在系统“文件与文件夹”列表",
+                    )),
+                    _ => Some(files_item(
+                        "partial",
+                        "部分受保护文件夹已授权；其余位置可重新检查并在弹窗中允许，或到系统设置手动打开",
+                    )),
                 }
             }
             "full_disk" => {
                 if full_disk_granted() {
-                    Some(full_disk_item("granted", "完全磁盘访问已生效，可处理受保护位置的文件"))
+                    Some(full_disk_item(
+                        "granted",
+                        "完全磁盘访问已生效，可处理受保护位置的文件",
+                    ))
                 } else {
-                    Some(full_disk_item("not_granted", "完全磁盘访问未生效；请在系统设置中允许后重新检查。系统开关不会自动反馈到应用"))
+                    Some(full_disk_item(
+                        "not_granted",
+                        "完全磁盘访问未生效；请在系统设置中允许后重新检查。系统开关不会自动反馈到应用",
+                    ))
                 }
             }
             _ => None,

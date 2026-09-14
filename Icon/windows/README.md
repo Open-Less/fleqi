@@ -1,3 +1,16 @@
-# Windows 图标（待生成）
+# Windows 图标
 
-P0 仅面向 macOS；Windows 资源管理器挂靠与打包属于 P1。届时执行 `pnpm tauri icon Icon/exports/Fleqi-iOS-Default-1024@1x.png` 生成 `icon.ico`，放入 `src-tauri/icons/`，并在 `src-tauri/tauri.conf.json` 的 `bundle.icon` 中登记。生成前请勿在本目录放置手工裁剪的图标，以免与生成结果不一致。
+`icon.ico` 已生成并登记：`src-tauri/icons/icon.ico`，同时在
+`src-tauri/tauri.conf.json` 的 `bundle.icon` 中列出。Windows 打包（CI 的
+`build-cross-platform.yml`）需要它生成资源文件，缺失会直接构建失败。
+
+生成方式（与 macOS 图标同一份 1024 源图，避免两个平台外观不一致）：
+
+```sh
+pnpm exec tauri icon "Icon/exports/Fleqi-iOS-Default-1024@1x.png" -o /tmp/fleqi-icons
+cp /tmp/fleqi-icons/icon.ico src-tauri/icons/icon.ico
+```
+
+只取 `icon.ico`，不要整目录覆盖：`src-tauri/icons/` 里已有的 PNG 与
+`icon.icns` 是按 macOS 需要单独产出的，重新生成会与当前外观不一致。
+本目录只放生成说明，不放手工裁剪的图标。
