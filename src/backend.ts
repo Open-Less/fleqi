@@ -87,7 +87,9 @@ export function useFleqi(){
   const [update,setUpdate]=useState<UpdateInfo|null>(null);
   const [updateProgress,setUpdateProgress]=useState<{downloaded:number;total:number|null;phase:string}|null>(null);
   const [updateBusy,setUpdateBusy]=useState(false);
-  const checkUpdate=useCallback(async()=>{if(!nativeHost)return;try{const value=await backend<UpdateInfo>('update_check');setUpdate(value.available?value:null);return value;}catch(error){setNotice(String(error));return undefined;}},[]);
+  // 启动后的自动检查是静默的：更新通道还没发布过 Release（releases/latest 返回 404）
+  // 时不该在界面上弹一条失败提示，用户主动点击“检查更新”时才报错。
+  const checkUpdate=useCallback(async(options?:{silent?:boolean})=>{if(!nativeHost)return;try{const value=await backend<UpdateInfo>('update_check');setUpdate(value.available?value:null);return value;}catch(error){if(!options?.silent)setNotice(String(error));return undefined;}},[]);
   const installUpdate=useCallback(async()=>{setUpdateBusy(true);setUpdateProgress({downloaded:0,total:null,phase:'download'});try{await backend('update_install');}catch(e){setNotice(String(e));setUpdateBusy(false);setUpdateProgress(null);}return undefined;},[]);
   const dismissUpdate=useCallback(()=>{if(!updateBusy)setUpdate(null);},[updateBusy]);
   useEffect(()=>{
@@ -95,7 +97,7 @@ export function useFleqi(){
     void listen<{phase:string;downloaded?:number;total?:number}>('fleqi:update',e=>{const {phase,downloaded=0,total=null}=e.payload;setUpdateProgress({downloaded,total:total??null,phase});}).then(value=>{if(stopped)value();else off=value;});
     return()=>{stopped=true;off?.();};
   },[]);
-  useEffect(()=>{const timer=setTimeout(()=>{void checkUpdate();},1500);return()=>clearTimeout(timer);},[checkUpdate]);
+  useEffect(()=>{const timer=setTimeout(()=>{void checkUpdate({silent:true});},1500);return()=>clearTimeout(timer);},[checkUpdate]);
   return {snapshot,error,notice,setNotice,page,navigate,refresh,run,save,settingsPage,setSettingsPage,settingsOpen,openSettings,closeSettings,settingsSurface,update,updateProgress,updateBusy,checkUpdate,installUpdate,dismissUpdate};
 }
 export type FleqiController=ReturnType<typeof useFleqi>;
