@@ -18,6 +18,20 @@ Fleqi 的代码、CI 与发布都在 GitHub 上完成，本地负责开发与真
 
 同一分支的新推送会取消上一次未完成的 `CI` 与跨平台构建；发版不取消（避免发布到一半被打断）。
 
+### 已验证的首次运行
+
+`beta` 上的第一次完整运行（含 PR #1、#2）结果：
+
+| 工作流 | 结果 | 产物 |
+| --- | --- | --- |
+| `CI` | 五项任务全部通过 | `fleqi-web-dist` |
+| `PR conventions` | 通过 | — |
+| `Build macOS` | 通过（修正签名身份后） | `fleqi-macos-debug-<sha>`，84 MB |
+| `Build Linux and Windows` | 通过 | Linux 234 MB（deb/AppImage）、Windows 56 MB（NSIS） |
+| `Release`（dry run） | 见[发布与分发](Release_and_Distribution.md) | 仅 workflow artifact，不创建 Release |
+
+`main` 仍是空的正式分支：第一次真正发版时用 `release/*` 把 `beta` 推过去，工作流文件随之进入默认分支。
+
 ### 冷热路径的取舍
 
 - `build-macos.yml` 默认**不**构建 FFmpeg/qpdf 静态引擎（`FLEQI_SKIP_ENGINES=1`）。

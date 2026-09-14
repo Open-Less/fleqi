@@ -123,4 +123,8 @@ GitHub 登录新增令牌方式：OAuth 应用尚未注册时，界面提供「�
   界面行为测试、核心库测试、PI 运行时测试、桌面端静态检查（rustfmt + 两份 clippy + Swift 单测）；
   `Build Linux and Windows` 的 Linux（deb/AppImage）与 Windows（NSIS）任务均产出安装包。
   首次运行暴露的问题与修法见[仓库与持续集成](../engineering/Repository_and_CI.md#五首次运行暴露并修好的问题)。
-- `Build macOS` 与 `Release` 在合并进 `beta` 后才会触发，结果补记在下一轮验收。
+- `Build macOS`（合并进 `beta` 后触发）通过，产出 84 MB 的 debug 应用包；Windows 56 MB NSIS
+  安装包与 Linux 234 MB 的 deb/AppImage 同样上传成功。修正了 `APPLE_SIGNING_IDENTITY`
+  为空导致 codesign 失败的问题。
+- `Release` 以 dry run（不创建 Release）验证流水线：完整引擎构建、更新包签名与清单生成见
+  下一节记录。首次正式发版仍需用户决定 tag。
