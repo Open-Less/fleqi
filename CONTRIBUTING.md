@@ -82,9 +82,19 @@ git config user.email "1933142963@qq.com"   # 与 GitHub 账号绑定的邮箱
 git log -1 --format="%an <%ae>"             # 每次提交后确认作者
 ```
 
-本仓库的 `.git/config` 已经固定了该身份。换机器或克隆到新目录后要重新设置，
-不要沿用系统或别的项目的默认身份（历史上出现过一次
-`trip <trip@users.noreply.github.com>`，已通过重写历史修正）。
+本仓库的 `.git/config` 已经固定了该身份，并设了 `user.useConfigOnly=true`
+（身份没显式配置时 git 会直接拒绝提交，不会退回机器默认值）。换机器或克隆到新目录后
+要重新设置，不要沿用系统或别的项目的默认身份。
+
+`pnpm hooks:install` 会同时装上两个钩子：
+
+- `.githooks/commit-msg`：校验提交信息格式；
+- `.githooks/pre-commit`：邮箱不是 `1933142963@qq.com` 时直接拒绝提交
+  （临时需要别的身份时用 `FLEQI_COMMIT_EMAIL` 覆盖）。
+
+历史上出现过一次 `trip <trip@users.noreply.github.com>`（另一个 GitHub 账号）的提交，
+重写历史只能清掉分支上的，GitHub 为已合并 PR 永久保留的 `refs/pull/*/head` 仍会被
+贡献者统计计入，无法删除，最终只能重建仓库解决。
 
 ### 本机工具链
 

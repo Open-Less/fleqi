@@ -1,0 +1,13 @@
+#!/bin/sh
+# 身份守卫：提交前检查 user.email，写错会让 GitHub 把提交算到别人账号上，
+# 甚至让别人出现在仓库贡献者名单里。启用：pnpm hooks:install
+expected="${FLEQI_COMMIT_EMAIL:-1933142963@qq.com}"
+actual=$(git config user.email 2>/dev/null)
+if [ "$actual" != "$expected" ]; then
+  echo "提交被拦下：当前 user.email 是 \"$actual\"，应为 \"$expected\"。" >&2
+  echo "修正（只改本仓库，不要动全局配置）：" >&2
+  echo "  git config user.name \"TRIP\"" >&2
+  echo "  git config user.email \"$expected\"" >&2
+  exit 1
+fi
+exit 0

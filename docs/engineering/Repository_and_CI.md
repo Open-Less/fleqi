@@ -20,7 +20,7 @@ Fleqi 的代码、CI 与发布都在 GitHub 上完成，本地负责开发与真
 
 ### 已验证的首次运行
 
-`beta` 上的第一次完整运行（含 PR #1、#2）结果：
+`beta` 上的第一次完整运行结果：
 
 | 工作流 | 结果 | 产物 |
 | --- | --- | --- |
@@ -31,6 +31,13 @@ Fleqi 的代码、CI 与发布都在 GitHub 上完成，本地负责开发与真
 | `Release`（dry run） | 通过（不创建 Release） | `fleqi-release-dry-run-v0.0.1`，196 MB：DMG、`Fleqi_aarch64.app.tar.gz` 与 `.sig`、`latest.json` |
 
 `main` 仍是空的正式分支：第一次真正发版时用 `release/*` 把 `beta` 推过去，工作流文件随之进入默认分支。
+
+仓库在第一天重建过一次：最初的提交里混进了另一个 GitHub 账号
+（`trip <trip@users.noreply.github.com>`）的身份，重写历史后分支干净了，但 GitHub 会永久保留
+已合并 PR 的 `refs/pull/*/head`（API 拒绝删除，返回 422），贡献者统计仍会把这些提交算给那个账号，
+所以只能新建仓库。重建前的 PR 与 Actions 运行记录保存在私有归档仓库 `Open-Less/fleqi-archive`
+里，导出快照在 `~/.fleqi/archive/fleqi-before-recreate/`。提交身份现在由
+`.githooks/pre-commit` 守卫，设置见 [CONTRIBUTING.md](../../CONTRIBUTING.md)。
 
 ### 冷热路径的取舍
 
