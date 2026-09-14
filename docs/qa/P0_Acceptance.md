@@ -126,5 +126,7 @@ GitHub 登录新增令牌方式：OAuth 应用尚未注册时，界面提供「�
 - `Build macOS`（合并进 `beta` 后触发）通过，产出 84 MB 的 debug 应用包；Windows 56 MB NSIS
   安装包与 Linux 234 MB 的 deb/AppImage 同样上传成功。修正了 `APPLE_SIGNING_IDENTITY`
   为空导致 codesign 失败的问题。
-- `Release` 以 dry run（不创建 Release）验证流水线：完整引擎构建、更新包签名与清单生成见
-  下一节记录。首次正式发版仍需用户决定 tag。
+- `Release` 以 dry run（不创建 Release）验证流水线：完整构建 FFmpeg/qpdf 静态引擎、打包 DMG 与
+  更新包、用仓库 Secrets 里的私钥签名、生成 `latest.json`，产物 196 MB 全部正常；发布步骤按预期跳过。
+  首次正式发版仍需用户决定 tag。修复了两处只在发版路径上出现的问题：打包器要求
+  `plugins.updater` 配置、`check-package.mjs` 找不到 `--target` 产物目录。

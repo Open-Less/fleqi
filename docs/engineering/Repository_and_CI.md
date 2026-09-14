@@ -28,7 +28,7 @@ Fleqi 的代码、CI 与发布都在 GitHub 上完成，本地负责开发与真
 | `PR conventions` | 通过 | — |
 | `Build macOS` | 通过（修正签名身份后） | `fleqi-macos-debug-<sha>`，84 MB |
 | `Build Linux and Windows` | 通过 | Linux 234 MB（deb/AppImage）、Windows 56 MB（NSIS） |
-| `Release`（dry run） | 见[发布与分发](Release_and_Distribution.md) | 仅 workflow artifact，不创建 Release |
+| `Release`（dry run） | 通过（不创建 Release） | `fleqi-release-dry-run-v0.0.1`，196 MB：DMG、`Fleqi_aarch64.app.tar.gz` 与 `.sig`、`latest.json` |
 
 `main` 仍是空的正式分支：第一次真正发版时用 `release/*` 把 `beta` 推过去，工作流文件随之进入默认分支。
 

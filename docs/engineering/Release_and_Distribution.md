@@ -41,6 +41,20 @@ git tag v0.0.1-beta.1 && git push origin v0.0.1-beta.1   # 测试版
 
 发版失败时用 `workflow_dispatch` 传入同一个 tag 重跑即可，不要重新打 tag。
 
+### 先在 dry run 里验证
+
+不想直接发版时，手动触发 `Release` 并勾选 `dry_run`（`tag` 留空表示按当前分支的版本号）：
+它完整构建、签名、生成清单，但不创建 Release，产物作为 workflow artifact 保留 7 天。
+当前流水线已用这种方式验证过一次：DMG、`Fleqi_aarch64.app.tar.gz`、`.sig` 与 `latest.json`
+全部产出正常（本仓库尚未配置 Developer ID 证书，签名走的是 ad-hoc）。
+
+### tag 必须打在有工作流文件的提交上
+
+GitHub 只运行被 tag 的那个提交里存在的工作流文件。`main` 目前还停留在初始提交
+（里面没有 `.github/workflows/`），所以在把 `beta` 通过 `release/*` 合并进 `main` 之前，
+**tag 要打在 `beta` 的提交上**：`git tag v0.0.1 origin/beta && git push origin v0.0.1`。
+第一次正式发版建议先把 `beta` 合进 `main`，之后两条线都可用。
+
 ## 三、签名密钥
 
 更新包用 minisign 签名，客户端用内置公钥校验；校验不过的包不会安装。
