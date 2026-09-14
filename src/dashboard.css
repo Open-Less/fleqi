@@ -148,7 +148,7 @@ html[data-surface='settings'],html[data-surface='settings'] body,html[data-surfa
 .interaction-card {padding:16px;border:1px solid var(--border);background:var(--card);color:var(--foreground);border-radius:10px;margin-bottom:12px;}
 .interaction-card>p {font-size:13px;line-height:1.8;margin:9px 0 15px;}.section-kicker {font-size:11px;color:var(--muted-foreground);}
 .button-row {display:flex;gap:8px;flex-wrap:wrap;}.answer-form {display:flex;gap:8px;}
-.native-agent {background:transparent;margin:0;min-height:100vh;display:flex;flex-direction:column;justify-content:flex-end;padding:14px 0 18px;--bar-height:56px;--button-size:36px;--control-gap:14px;}
+.native-agent {background:transparent;margin:0;min-height:100vh;display:flex;flex-direction:column;justify-content:flex-end;padding:14px 0 8px;--bar-height:56px;--button-size:36px;--control-gap:14px;}
 .live-region {width:100%;color:var(--bar-ink);}
 .native-agent .bar-controls {padding-inline:20px;}.native-agent .command-input {height:34px;font-size:14px;padding-inline:16px;}
 .native-agent .round-button svg {width:21px;height:21px;}

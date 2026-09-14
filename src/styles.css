@@ -49,6 +49,9 @@ html[data-native-backdrop='true'] .scene-background { display: none; }
 .round-button:hover:not(:disabled) { background: var(--control-hover); }
 .round-button:active:not(:disabled) { transform: scale(.94); }
 .add-button svg { width: 25px; height: 25px; stroke-width: 1.9; }
+/* 选中数量只以角标形式出现在 `+` 上；选中即上下文，不再在底栏上方重复展示。 */
+.add-button { position: relative; }
+.add-badge { position: absolute; top: -3px; right: -3px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: #2f6fe4; color: #fff; font-size: 10px; font-weight: 600; line-height: 1; display: grid; place-items: center; pointer-events: none; border: 1px solid var(--bar-border); }
 .send-button svg { width: 20px; height: 20px; stroke-width: 2.25; transform: translate(-1px, 1px); }
 .send-button:disabled { opacity: .45; }
 .settings-button svg { width: 23px; height: 23px; stroke-width: 2.2; }
@@ -92,11 +95,8 @@ legend { padding: 0; font-size: 11px; color: var(--bar-secondary); margin-bottom
 .material-option:disabled { opacity: .48; }
 .panel-footnote, .accessibility-note { color: var(--bar-secondary); font-size: 10px; line-height: 1.6; margin: 0; }
 .context-popover { position: absolute; z-index: 4; bottom: calc(100% + 10px); left: 26px; right: 26px; width: fit-content; max-width: calc(100% - 52px); border-radius: 12px; padding: 9px 12px; background: var(--panel-fill); color: var(--bar-ink); border: 1px solid var(--bar-border); box-shadow: 0 1px 4px #00000018; backdrop-filter: blur(20px); font-size: 12px; }
-.file-context, .notice { display: flex; align-items: center; gap: 8px; }
-.file-context > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.notice { max-width: 470px; line-height: 1.6; }
+.notice { display: flex; align-items: center; gap: 8px; max-width: 470px; line-height: 1.6; }
 .notice > svg { flex-shrink: 0; }
-.file-context + .notice { margin-top: 5px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .standalone { min-height: 100vh; display: flex; flex-direction: column; justify-content: flex-end; padding: 40px 24px 24px; background: transparent; }
 .standalone .agent-region { width: min(1120px, 100%); margin-inline: auto; }

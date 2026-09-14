@@ -26,15 +26,15 @@ export function LiveAgentBar({controller:c}:{controller:FleqiController}){
   const reply=task&&terminalStates.has(task.status)?{status:task.status,message:task.message||'任务已完成',label:statusLabels[task.status]??task.status}:null;
   const contextRef=useRef<ContextSnapshot|null>(data?.context??null);
   useEffect(()=>{contextRef.current=data?.context??null;},[data?.context]);
-  // 气泡方向：底栏固定在 Finder 窗口下方不动，气泡按屏幕空间向下或向上展开。
-  const [direction,setDirection]=useState<'below'|'above'>('below');
+  // 气泡方向：底栏绝对钉在屏幕底部，气泡一律向上展开。
+  const [direction,setDirection]=useState<'below'|'above'>('above');
   const spaces=useRef({below:0,above:0});
   const contentRef=useRef(0);
   const measure=useRef<()=>void>(()=>{});
-  // 气泡、所选文件提示、斜杠菜单都是绝对定位的浮层：它们从不参与底栏的排版，
-  // 底栏在网页里的位置只由下面这段预留空间决定，因此屏幕上永远不动。
+  // 气泡、提示、斜杠菜单都不参与底栏排版：底栏在网页里的位置只由下面这段
+  // 预留空间决定，面板向上长高，底栏在屏幕上永远不动。
   const overlaySelector='.agent-bubble, .context-popover, .slash-menu, .interaction-card';
-  const room={top:6,bottom:10};
+  const room={top:6,bottom:0};
   measure.current=()=>{
     if(!nativeHost||!region.current)return;
     const element=region.current;
@@ -111,7 +111,6 @@ export function LiveAgentBar({controller:c}:{controller:FleqiController}){
   const submit=async(text:string)=>{const context=data.context?.hostWindow==='explicit-selection'?data.context.id:null;if(!request.current||request.current.text!==text||request.current.context!==context)request.current={text,context,id:crypto.randomUUID()};const task=await backend<TaskRecord>('task_submit',{input:{requestId:request.current.id,prompt:text,contextId:context}});request.current=null;await c.refresh();return task;};
   const submitAnswer=async(text:string)=>{if(!pending)return;await backend('interaction_answer',{id:pending.id,answer:text});await c.refresh();};
   const notice=c.notice??c.error;
-  const shownContextFiles=(data.context?.files??[]).length;
   return <main className="native-agent" data-theme={data.settings.appearance.theme}><section ref={region} className="live-region" data-bubble={direction}>
     <div className="bar-anchor">
       {direction==='above'&&<div className="bar-overlays above">
@@ -119,7 +118,7 @@ export function LiveAgentBar({controller:c}:{controller:FleqiController}){
         <Reveal show={!!reply&&bubbleVisible&&!commandsOpen&&!pending} edge="bottom"><div className="agent-bubble above" role="status"><strong><span className={`status-dot ${reply?.status}`}/>{reply?.label}<button className="bubble-close" onClick={()=>{setBubbleVisible(false);setHeldTask(null);}} aria-label="关闭">×</button></strong><p>{reply?.message}</p></div></Reveal>
         <Reveal show={!!notice&&!commandsOpen} edge="bottom"><div className="agent-bubble above" role="alert">{notice}<button className="bubble-close" onClick={()=>c.setNotice(null)} aria-label="关闭">×</button></div></Reveal>
       </div>}
-      <AgentBar layoutKey={`${direction}:${pending?1:0}:${reply?1:0}:${notice?1:0}:${shownContextFiles}`} onMenuOpenChange={setCommandsOpen} controller={c} appearance={data.settings.appearance} onAppearance={appearance=>void c.save({appearance})} scene={false} live={{busy,onSubmit:submit,onChoose:()=>c.run('choose_files'),onSettings:()=>c.openSettings('general'),onHide:()=>c.run('bar_toggle',{show:false}),answerMode,onSubmitAnswer:submitAnswer,files:data.context?.files??[],onClearFiles:()=>c.run('context_clear')}}/>
+      <AgentBar layoutKey={`${direction}:${pending?1:0}:${reply?1:0}:${notice?1:0}`} onMenuOpenChange={setCommandsOpen} controller={c} appearance={data.settings.appearance} onAppearance={appearance=>void c.save({appearance})} scene={false} live={{busy,onSubmit:submit,onChoose:()=>c.run('choose_files'),onSettings:()=>c.openSettings('general'),onHide:()=>c.run('bar_toggle',{show:false}),answerMode,onSubmitAnswer:submitAnswer,files:data.context?.files??[],explicit:data.context?.hostWindow==='explicit-selection',onClearFiles:()=>c.run('context_clear')}}/>
       {direction==='below'&&<div className="bar-overlays below">
         <Reveal show={!!pending&&bubbleVisible&&!commandsOpen} edge="top"><div className="agent-bubble" role="alert">{pending&&<Interaction value={pending} controller={c} inline noForm={answerMode}/>}</div></Reveal>
         <Reveal show={!!reply&&bubbleVisible&&!commandsOpen&&!pending} edge="top"><div className="agent-bubble" role="status"><strong><span className={`status-dot ${reply?.status}`}/>{reply?.label}<button className="bubble-close" onClick={()=>{setBubbleVisible(false);setHeldTask(null);}} aria-label="关闭">×</button></strong><p>{reply?.message}</p></div></Reveal>

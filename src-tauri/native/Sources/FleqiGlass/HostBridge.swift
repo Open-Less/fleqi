@@ -477,8 +477,9 @@ public func fleqiHostCommand(_ pointer: UnsafePointer<CChar>?) -> UnsafeMutableP
             if let value=request["barOffset"] as? Double,value.isFinite {host.barOffset=CGFloat(min(1600,max(0,value)))}
             if let panel=host.panel {
                 let motion=NativeWindowMotion.forWindow(panel)
-                // 收起时只需上移“底栏顶边偏移 + 底栏高度”，气泡不会露在窗口外。
-                motion.tuckDistance = host.barOffset + host.barHeight + 2
+                // 收起时向屏幕下方滑出“面板高度 - 底栏顶边偏移 + 2”，把底栏整条推出屏幕底边；
+                // 面板底边本就贴屏幕底部，气泡在上方不会露出来。
+                motion.tuckDistance = -(host.height - host.barOffset) - 2
             }
             host.layout()
             return jsonResult(["ok":true,"spaceBelow":Double(host.spaceBelow),"spaceAbove":Double(host.spaceAbove)])

@@ -80,9 +80,9 @@ final class NativeWindowMotion {
         let target=fullFrame ?? window.frame
         let anchor=origin ?? CGPoint(x:target.midX,y:target.maxY)
         let contracted=compact ? target.offsetBy(dx:0,dy:8):FleqiMotion.contracted(target,around:anchor)
-        // 仅底栏（attachment）使用“从宿主窗口后方滑入/滑出 + 高斯模糊”：
-        // 收起距离按底栏自身高度计算，气泡在上或在下都不会露出多余部分。
-        let tuck=attachment ? target.offsetBy(dx:0,dy:tuckDistance>0 ? tuckDistance : target.height):contracted
+        // 仅底栏（attachment）使用“滑入/滑出 + 高斯模糊”：底栏钉在屏幕底部，
+        // 收起距离为负（向屏幕下方滑出），出现时从底边下方滑回原位。
+        let tuck=attachment ? target.offsetBy(dx:0,dy:tuckDistance != 0 ? tuckDistance : target.height):contracted
         let startFrame=tuck
         let time=FleqiMotion.reduced ? 0:(compact ? FleqiMotion.feedbackDuration:FleqiMotion.windowDuration)
         if visible && !window.isVisible {
