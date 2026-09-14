@@ -1,0 +1,5 @@
+# Xcode 27 链接器在 MACOSX_DEPLOYMENT_TARGET=15 时会产出 dyld 拒绝加载的 proc-macro dylib
+# （mis-aligned LINKEDIT string pool）。Tauri CLI 会按 minimumSystemVersion 注入 15.0，
+# 这里强制回落到 rustc 默认的 11.0；应用自身的最低系统要求仍由 tauri.conf.json 声明。
+[env]
+MACOSX_DEPLOYMENT_TARGET = { value = "11.0", force = true }

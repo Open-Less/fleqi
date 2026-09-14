@@ -1,0 +1,24 @@
+[package]
+name = "fleqi-core"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+rusqlite = { version = "0.38", features = ["bundled"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+zip = { version = "4", default-features = false, features = ["deflate"] }
+quick-xml = "0.38"
+trash = "5"
+walkdir = "2"
+url = "2"
+tempfile = "3"
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", features = ["fs"] }
+
+[dev-dependencies]
+tempfile = "3"

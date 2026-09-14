@@ -1,0 +1,26 @@
+# 依赖
+node_modules/
+runtime/pi/node_modules/
+
+# 前端与原生构建产物
+dist/
+src-tauri/target/
+crates/*/target/
+src-tauri/gen/
+src-tauri/runtime-resources/
+.build/
+src-tauri/native/.build/
+*.dmg
+
+# 测试输出
+test-results/
+playwright-report/
+
+# 本地工具状态
+.mimosa/
+
+# 系统与环境
+.DS_Store
+.env
+.env.*
+!.env.example
