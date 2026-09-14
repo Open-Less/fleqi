@@ -55,15 +55,22 @@ test('IME confirmation does not submit and preview never claims file execution',
   await expect(input).toHaveValue('把图片转为 JPG');
 });
 
-test('selecting files updates context without reading or uploading file contents', async ({ page }) => {
+test('selected files show only as a badge on the plus button, which becomes a clear control', async ({ page }) => {
   await page.goto('/?surface=preview');
+  await expect(page.getByRole('button', { name: '选择文件' })).toBeVisible();
   await page.getByLabel('添加文件').setInputFiles([
     { name: '中文 图片.png', mimeType: 'image/png', buffer: Buffer.from('fixture') },
     { name: '第二张.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('fixture') },
   ]);
-  await expect(page.getByRole('status')).toContainText('已选择 2 个文件');
-  await page.getByRole('button', { name: '清除所选文件' }).click();
+  // 选中即上下文：不在底栏上方重复展示，只体现在 `+` 的角标与按钮形态上。
+  await expect(page.locator('.add-badge')).toHaveText('2');
+  await expect(page.locator('.file-context')).toHaveCount(0);
   await expect(page.getByRole('status')).toHaveCount(0);
+  const clear = page.getByRole('button', { name: '清除所选文件' });
+  await expect(clear).toBeVisible();
+  await clear.click();
+  await expect(page.locator('.add-badge')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '选择文件' })).toBeVisible();
 });
 
 test('compact window preserves equal theme dimensions without horizontal overflow', async ({ page }) => {
@@ -97,15 +104,12 @@ test('live bar opens the full settings dialog in browser preview',async({page})=
   await expect(page.getByRole('heading',{name:'概览',exact:true})).toBeVisible();
 });
 
-test('the selected-file chip stays visible instead of being clipped by the reveal wrapper',async({page})=>{
+test('the bar never renders a file list above itself',async({page})=>{
   await page.goto('/?surface=preview');
   await page.getByLabel('添加文件').setInputFiles([{name:'图片.png',mimeType:'image/png',buffer:Buffer.from('fixture')}]);
-  const popover=page.locator('.context-popover');
-  await expect(popover).toBeVisible();
-  const box=await popover.boundingBox();expect(box&&box.height>20);
-  // 揭示容器必须放开裁剪，否则绝对定位浮层整体不可见。
-  await expect(page.locator('.context-reveal')).toHaveCSS('overflow','visible');
-  await expect(page.locator('.context-popover .small-icon')).toBeVisible();
+  await expect(page.locator('.file-context')).toHaveCount(0);
+  await expect(page.locator('.context-popover')).toHaveCount(0);
+  // 只有瞬时提示（notice）才会使用底栏上方的浮层，且它不再承载文件名。
 });
 
 test('running state folds the input into a spinner circle and sweeps tools across the strip',async({page})=>{

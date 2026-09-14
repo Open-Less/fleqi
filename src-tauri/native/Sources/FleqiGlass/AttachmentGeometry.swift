@@ -1,13 +1,13 @@
 import Foundation
 
-/// 底栏的定位规则：底栏永远贴在 Finder 窗口下边缘下方，与窗口左右对齐。
+/// 底栏的定位规则：底栏是绝对定位的——底边永远钉在屏幕底部（Dock 之上），
+/// 不随访达窗口的高度、位置或是否贴底而改变；横向范围与访达窗口对齐。
 /// 面板只改变高度，底栏本体的位置由 `barOffset`（底栏顶边到面板顶边的距离）决定，
-/// 因此气泡向上或向下展开都不会让底栏移动。这里从不修改 Finder 窗口的框架。
+/// 气泡一律向上展开。这里从不修改 Finder 窗口的框架。
 struct AttachmentGeometry {
-    static let gap: CGFloat = 8
     struct Placement {
         var panel: CGRect
-        /// 底栏下方到屏幕可见区域底部的空间，气泡向下展开时可用。
+        /// 底栏下方没有可用空间：气泡永远向上展开，保留字段供界面判断。
         var spaceBelow: CGFloat
         /// 底栏上方到屏幕可见区域顶部的空间，气泡向上展开时可用。
         var spaceAbove: CGFloat
@@ -22,20 +22,13 @@ struct AttachmentGeometry {
     ) -> Placement? {
         guard host.width > 200, host.height > 100 else { return nil }
         let height = max(barHeight, contentHeight)
-        // 全屏窗口没有窗口外的空间：把底栏放在窗口内侧底部，气泡只能向上展开。
-        let barTop = fullscreen ? host.minY + gap + barHeight : host.minY - gap
-        let spaceBelow = max(0, barTop - barHeight - visible.minY)
+        let width = min(host.width, visible.width)
+        let x = min(max(host.minX, visible.minX), visible.maxX - width)
+        // AppKit 中 y 轴向上：面板底边贴屏幕可见区域底部，顶边随内容增高。
+        let panel = CGRect(x: x, y: visible.minY, width: width, height: height)
+        let barTop = panel.maxY - barOffset
         let spaceAbove = max(0, visible.maxY - barTop)
-        // barOffset 是面板顶边到底栏顶边的距离：面板只向上（气泡在上）或向下
-        // （气泡在下）长高，底栏本身不动。AppKit 中面板顶边是 maxY。
-        var topEdge = barTop + barOffset
-        let lowest = visible.minY + height
-        topEdge = min(max(topEdge, lowest), visible.maxY)
-        return Placement(
-            panel: CGRect(x: host.minX, y: topEdge - height, width: host.width, height: height),
-            spaceBelow: spaceBelow,
-            spaceAbove: spaceAbove
-        )
+        return Placement(panel: panel, spaceBelow: 0, spaceAbove: spaceAbove)
     }
 }
 

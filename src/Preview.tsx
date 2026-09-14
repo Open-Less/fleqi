@@ -11,7 +11,7 @@ document.documentElement.dataset.surface = standalone ? 'bar' : 'scene';
 // 演示开关：`?surface=preview&demo=running` 让场景里的控制栏停在“任务进行中”
 // 形态（辅助按钮收拢、输入框缩成圆圈转圈、左侧掠过工具条），供界面验收与自动化测试使用。
 const demoLive = params.get('demo') === 'running'
-  ? { busy: true, files: ['/tmp/示例图片.png', '/tmp/旅行合同.pdf'], onSubmit: async () => undefined, onChoose: async () => undefined, onSettings: async () => undefined, onHide: async () => undefined, onClearFiles: async () => undefined }
+  ? { busy: true, files: ['/tmp/示例图片.png', '/tmp/旅行合同.pdf'], explicit: true, onSubmit: async () => undefined, onChoose: async () => undefined, onSettings: async () => undefined, onHide: async () => undefined, onClearFiles: async () => undefined }
   : undefined;
 
 export function Preview() {

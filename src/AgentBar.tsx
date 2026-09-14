@@ -1,6 +1,6 @@
 import { Reveal } from './motion';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowUpRight, File, LoaderCircle, X } from 'lucide-react';
+import { ArrowUpRight, LoaderCircle, X } from 'lucide-react';
 import { BorderBeam } from 'border-beam';
 import { AssetIcon,SettingsIcon,SvgImage } from './icons';
 import { SlashMenu,slashOptions,type SlashOption } from './SlashMenu';
@@ -10,7 +10,7 @@ import type { Appearance } from './appearance';
 import { getMaterialSupport, nativeHost, updateNativeMaterial, type MaterialSupport } from './native';
 import { AppearancePanel } from './AppearancePanel';
 
-interface Props { appearance: Appearance; onAppearance: (value: Partial<Appearance>) => void; scene: boolean; layoutKey?:string; onMenuOpenChange?:(open:boolean)=>void; controller?:FleqiController; live?: {busy:boolean;files?:string[];onClearFiles?:()=>Promise<unknown>;onSubmit:(text:string)=>Promise<unknown>;onChoose:()=>Promise<unknown>;onSettings:()=>Promise<unknown>;onHide:()=>Promise<unknown>;answerMode?:boolean;onSubmitAnswer?:(text:string)=>Promise<unknown>} }
+interface Props { appearance: Appearance; onAppearance: (value: Partial<Appearance>) => void; scene: boolean; layoutKey?:string; onMenuOpenChange?:(open:boolean)=>void; controller?:FleqiController; live?: {busy:boolean;files?:string[];explicit?:boolean;onClearFiles?:()=>Promise<unknown>;onSubmit:(text:string)=>Promise<unknown>;onChoose:()=>Promise<unknown>;onSettings:()=>Promise<unknown>;onHide:()=>Promise<unknown>;answerMode?:boolean;onSubmitAnswer?:(text:string)=>Promise<unknown>} }
 
 export function AgentBar({ appearance, onAppearance, scene, layoutKey, live, controller,onMenuOpenChange }: Props) {
   const bar = useRef<HTMLDivElement>(null);
@@ -101,9 +101,11 @@ export function AgentBar({ appearance, onAppearance, scene, layoutKey, live, con
   };
 
   const closeSettings = () => { setOpen(false); };
-  // 实时底栏展示 Finder 实际捕获的选区，用户提交前就能看到会处理哪些文件。
+  // 选中就是选中：访达选区不再在底栏上方重复展示。只有手动通过 `+` 选文件时，
+  // `+` 变成 ×（点击清除、回到跟随访达），并在按钮角标上显示数量。
   const liveFiles=live?.files??[];
   const shownFiles=live?liveFiles:files;
+  const explicit=live?!!live.explicit:files.length>0;
   // 任务进行中：快捷按钮收起、输入框收成圆圈转圈，空出的横条按顺序掠过工具调用。
   const running=!!live?.busy&&!live?.answerMode;
   const activeTask=controller?.snapshot?.tasks.find(t=>t.id===controller.snapshot?.activeTaskId)??null;
@@ -120,12 +122,8 @@ export function AgentBar({ appearance, onAppearance, scene, layoutKey, live, con
 
   return (
     <div className="agent-region" data-theme={appearance.theme}>
-      <Reveal show={shownFiles.length>0||!!notice} edge="bottom" className="context-reveal">
+      <Reveal show={!!notice} edge="bottom" className="context-reveal">
         <div className="context-popover" role="status">
-          {shownFiles.length > 0 && <div className="file-context"><File size={15} />
-            <span title={shownFiles.join('\n')}>{shownFiles.length === 1 ? shownFiles[0].split('/').at(-1) : `已选择 ${shownFiles.length} 个文件：${shownFiles.slice(0,3).map(p=>p.split('/').at(-1)).join('、')}${shownFiles.length>3?'…':''}`}</span>
-            <button className="small-icon" aria-label="清除所选文件" onClick={() => {if(live?.onClearFiles)void live.onClearFiles();else setFiles([]);}}><X size={14} /></button>
-          </div>}
           {notice && <div className="notice"><ArrowUpRight size={15} /><span>{notice}</span>
             <button className="small-icon" aria-label="关闭提示" onClick={() => setNotice(null)}><X size={14} /></button>
           </div>}
@@ -134,8 +132,13 @@ export function AgentBar({ appearance, onAppearance, scene, layoutKey, live, con
       <Reveal show={menuOpen} edge="bottom" className="slash-reveal"><SlashMenu options={options} index={menuIndex} busy={commandBusy} onSelect={o=>void selectCommand(o)} onHover={setMenuIndex} onSettings={()=>controller?void controller.openSettings('models'):setOpen(true)}/></Reveal>
       <div ref={bar} className="agent-bar" data-native-material={nativeMaterial} data-testid="agent-bar">
         <form onSubmit={submit} aria-label="Fleqi 文件操作" className="bar-controls" data-running={running?'true':undefined}>
-          <button type="button" className="round-button add-button" aria-label="选择文件"
-            title="选择文件" disabled={choosing||dispatching} onClick={async() => {if(live){setChoosing(true);try{await live.onChoose();}finally{setChoosing(false);}}else fileInput.current?.click();}}>{choosing?<LoaderCircle className="animate-spin"/>:<SvgImage name="plusCircleFill" size={22}/>}</button>
+          <button type="button" className="round-button add-button" aria-label={explicit?'清除所选文件':'选择文件'}
+            title={explicit?'清除所选文件，回到跟随访达选区':'选择文件'} disabled={choosing||dispatching}
+            onClick={async() => {
+              if(explicit){if(live?.onClearFiles)await live.onClearFiles();else setFiles([]);return;}
+              if(live){setChoosing(true);try{await live.onChoose();}finally{setChoosing(false);}}else fileInput.current?.click();
+            }}>{choosing?<LoaderCircle className="animate-spin"/>:explicit?<X size={18}/>:<SvgImage name="plusCircleFill" size={22}/>}
+            {shownFiles.length>0&&<span className="add-badge" aria-hidden="true">{shownFiles.length>99?'99+':shownFiles.length}</span>}</button>
           {running&&<div className="tool-strip" aria-hidden="true">{ticker.map((label,index)=><span className="tool-chip" key={`${label}-${index}`}>{label}</span>)}{!ticker.length&&<span className="tool-chip idle">正在准备…</span>}</div>}
           <input ref={fileInput} className="visually-hidden" type="file" multiple tabIndex={-1} aria-label="添加文件"
             onChange={(event) => { setFiles(Array.from(event.target.files ?? [], (file) => file.name)); event.target.value = ''; input.current?.focus(); }} />
