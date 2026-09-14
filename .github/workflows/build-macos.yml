@@ -72,9 +72,6 @@ jobs:
           fi
           node scripts/prepare-notices.mjs
       - name: 打包（debug，跳过 DMG 签名步骤）
-        env:
-          # 未配置 Apple 证书时回退 ad-hoc 签名；CI 产物不用于分发，因此可以接受。
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: pnpm exec tauri build --debug --target "$RUST_TARGET" --bundles app
       - name: 校验 bundle 内的 PI 运行时
         if: github.event_name == 'workflow_dispatch' && inputs.with_engines

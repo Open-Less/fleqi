@@ -100,22 +100,38 @@ jobs:
           node scripts/prepare-runtime.mjs
           bash scripts/prepare-engines.sh
           node scripts/prepare-notices.mjs
+      # 证书与身份必须一起判断：secrets 未配置时 GitHub 会展开成空字符串，而 Tauri 会拿
+      # 空身份去执行 codesign（Signing with identity "" → no identity found）。未配置证书时
+      # 显式写入 ad-hoc 身份 "-"，让构建能完成但不做分发签名。
+      - name: 配置 Apple 签名
+        env:
+          CERT: ${{ secrets.APPLE_CERTIFICATE }}
+          CERT_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          NOTARY_ID: ${{ secrets.APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          write() { { echo "$1<<__FLEQI_EOF__"; printf '%s\n' "$2"; echo "__FLEQI_EOF__"; } >> "$GITHUB_ENV"; }
+          if [ -n "${CERT:-}" ] && [ -n "${IDENTITY:-}" ]; then
+            write APPLE_CERTIFICATE "$CERT"
+            write APPLE_CERTIFICATE_PASSWORD "$CERT_PASSWORD"
+            write APPLE_SIGNING_IDENTITY "$IDENTITY"
+            write APPLE_ID "$NOTARY_ID"
+            write APPLE_PASSWORD "$NOTARY_PASSWORD"
+            write APPLE_TEAM_ID "$TEAM"
+            echo "::notice::已配置 Developer ID 证书，本次构建会签名并公证。"
+          else
+            write APPLE_SIGNING_IDENTITY "-"
+            echo "::warning::未配置 Apple 证书：本次产物为 ad-hoc 签名，用户首次打开需在「隐私与安全性」中放行。"
+          fi
       - name: 打包（含更新签名）
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # 配置了 Developer ID 证书与公证凭据时自动签名并公证；未配置则回退 ad-hoc。
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
-          if [ -z "${APPLE_CERTIFICATE:-}" ]; then
-            echo "::warning::未配置 Apple 证书：本次产物为 ad-hoc 签名，用户首次打开需在「隐私与安全性」中放行。"
-          fi
           pnpm exec tauri build --target "$RUST_TARGET" \
             --bundles app,dmg \
             --config '{"bundle":{"createUpdaterArtifacts":true}}'

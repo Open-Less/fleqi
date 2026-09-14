@@ -81,6 +81,9 @@ Linux 与 Windows 的构建任务保证的是**可编译、可出安装包**，�
   resolve failed`）。现在解压走 `Expand-Archive`，打包 `pi.tar.gz` 用相对路径。
 - 桌面端静态检查缺少 Tauri 构建脚本要求的 bundle 资源（这些资源由
   `prepare-runtime.mjs` 生成、不入库），放占位文件即可。
+- `APPLE_SIGNING_IDENTITY` 未配置时 secrets 会展开成空字符串，Tauri 于是拿空身份去
+  `codesign`（`Signing with identity ""` → `no identity found`），打包直接失败。
+  release 流程现在先判断证书是否齐全：齐全才导出 Apple 变量，否则显式写 ad-hoc 身份 `-`。
 
 本机也要注意两件事，否则会误判"本地通过"：
 
