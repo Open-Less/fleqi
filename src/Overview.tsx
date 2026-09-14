@@ -5,14 +5,8 @@ import { ActionButton } from './ui';
 import { Interaction } from './Interaction';
 import { AccentIcon,AssetIcon,PiIcon } from './icons';
 import { GithubAccount } from './Account';
-import { statusLabels,terminalStates,type FleqiController } from './backend';
+import { operationLabels,statusLabels,terminalStates,type FleqiController } from './backend';
 
-const operationLabels:Record<string,string>={
-  rename:'改名',copy:'复制',move:'移动',create_directory:'新建文件夹',write_text:'写入文本',read_text:'读取文本',
-  zip_create:'打包 ZIP',zip_extract:'解压',image_convert:'图片转换',media_convert:'音视频转换',media_trim:'裁剪',
-  media_extract_audio:'提取音频',pdf_merge:'合并 PDF',pdf_split:'拆分 PDF',pdf_extract:'提取页面',pdf_rotate:'旋转 PDF',
-  pdf_compress:'压缩 PDF',docx_create:'生成 DOCX',docx_read:'读取 DOCX',trash:'移到废纸篓',inspect:'检查',list:'列出',open:'打开',reveal:'显示位置',copy_path:'复制路径',
-};
 const weekday=['一','二','三','四','五','六','日'];
 function dayKey(value:number){const date=new Date(value);return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;}
 function startOfWeek(value:Date){const date=new Date(value);date.setHours(0,0,0,0);const offset=(date.getDay()+6)%7;date.setDate(date.getDate()-offset);return date;}

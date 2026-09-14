@@ -142,6 +142,7 @@ pub fn run() {
             commands::permissions_check,
             commands::context_capture,
             commands::context_peek,
+            commands::selection_peek,
             commands::choose_files,
             commands::choose_directory,
             commands::task_submit,

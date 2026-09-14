@@ -4,9 +4,15 @@ import { AgentBar } from './AgentBar';
 import { readAppearance, saveAppearance, type Appearance, type Theme } from './appearance';
 import { nativeHost } from './native';
 
-const standalone = new URLSearchParams(location.search).get('surface') === 'bar';
+const params = new URLSearchParams(location.search);
+const standalone = params.get('surface') === 'bar';
 document.documentElement.dataset.native = String(nativeHost);
 document.documentElement.dataset.surface = standalone ? 'bar' : 'scene';
+// 演示开关：`?surface=preview&demo=running` 让场景里的控制栏停在“任务进行中”
+// 形态（辅助按钮收拢、输入框缩成圆圈转圈、左侧掠过工具条），供界面验收与自动化测试使用。
+const demoLive = params.get('demo') === 'running'
+  ? { busy: true, files: ['/tmp/示例图片.png', '/tmp/旅行合同.pdf'], onSubmit: async () => undefined, onChoose: async () => undefined, onSettings: async () => undefined, onHide: async () => undefined, onClearFiles: async () => undefined }
+  : undefined;
 
 export function Preview() {
   const [appearance, setAppearance] = useState(readAppearance);
@@ -40,7 +46,7 @@ export function Preview() {
         <div className="finder-reference" aria-label="Finder 参考场景（静态图片）">
           <img src="/references/finder-light.png" alt="浅色 Finder 参考窗口，位于 Fleqi 控制栏上方" draggable={false} />
         </div>
-        <AgentBar appearance={appearance} onAppearance={changeAppearance} scene />
+        <AgentBar appearance={appearance} onAppearance={changeAppearance} scene live={demoLive} />
       </section>
       <footer className="preview-footer">
         <span><i />交互预览<span className="footer-separator">·</span>尺寸以浅色参考图为准</span>

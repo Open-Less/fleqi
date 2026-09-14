@@ -96,3 +96,35 @@ test('live bar opens the full settings dialog in browser preview',async({page})=
   await page.goto('/?surface=settings');await page.getByRole('button',{name:'关闭设置'}).click();
   await expect(page.getByRole('heading',{name:'概览',exact:true})).toBeVisible();
 });
+
+test('the selected-file chip stays visible instead of being clipped by the reveal wrapper',async({page})=>{
+  await page.goto('/?surface=preview');
+  await page.getByLabel('添加文件').setInputFiles([{name:'图片.png',mimeType:'image/png',buffer:Buffer.from('fixture')}]);
+  const popover=page.locator('.context-popover');
+  await expect(popover).toBeVisible();
+  const box=await popover.boundingBox();expect(box&&box.height>20);
+  // 揭示容器必须放开裁剪，否则绝对定位浮层整体不可见。
+  await expect(page.locator('.context-reveal')).toHaveCSS('overflow','visible');
+  await expect(page.locator('.context-popover .small-icon')).toBeVisible();
+});
+
+test('running state folds the input into a spinner circle and sweeps tools across the strip',async({page})=>{
+  await page.goto('/?surface=preview&demo=running');
+  const bar=page.getByTestId('agent-bar');
+  await expect(bar.locator('.bar-controls')).toHaveAttribute('data-running','true');
+  for(const selector of ['.add-button','.send-button','.bar-divider']){
+    await expect(bar.locator(selector)).toHaveCSS('opacity','0');
+  }
+  const beamBox=await bar.locator('.command-beam').boundingBox();
+  expect(beamBox).not.toBeNull();
+  expect(Math.abs(beamBox!.width-beamBox!.height)).toBeLessThanOrEqual(2);
+  const spinner=bar.locator('.running-spinner');
+  await expect(spinner).toBeVisible();
+  await expect(spinner).toHaveCSS('animation-name','spin');
+  const strip=bar.locator('.tool-strip');
+  await expect(strip).toBeVisible();
+  const stripBox=await strip.boundingBox();
+  expect(stripBox!.x).toBeLessThan(beamBox!.x);
+  await expect(strip.locator('.tool-chip')).toHaveCount(1);
+  await expect(bar.getByRole('textbox',{name:'输入文件操作指令'})).toBeDisabled();
+});

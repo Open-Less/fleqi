@@ -538,6 +538,26 @@ pub async fn context_capture(app: AppHandle, state: State<'_, AppState>) -> Repl
     runtime::changed(&app);
     Ok(context)
 }
+/// 底栏高频轮询用的选区快照：只读 Finder 当前选中的路径，不做目录解析与
+/// 窗口校验，因此可以按几百毫秒的间隔调用；选区变化后再走完整的 context_capture。
+#[tauri::command]
+pub async fn selection_peek() -> Reply<Vec<String>> {
+    let value =
+        tokio::task::spawn_blocking(|| platform::host_call(json!({ "operation": "selection" })))
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
+    Ok(value
+        .get("files")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default())
+}
 /// 底栏轮询用的轻量探测：只读取 Finder 当前上下文，不落库、不广播，
 /// 前端据此判断选区是否变化后再决定是否真正捕获。
 #[tauri::command]
