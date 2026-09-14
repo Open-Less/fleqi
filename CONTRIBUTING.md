@@ -71,7 +71,23 @@ swift test --package-path src-tauri/native
 `docs/qa/P0_Acceptance.md` 的真机记录里。所谓“模型说文件已处理完成”不算证据，
 执行器必须自己核验结果。
 
+### 提交身份
+
+提交必须使用你自己的 GitHub 账号身份。身份写错时 GitHub 会把提交算到另一个账号头上，
+仓库的贡献者列表里就会出现一个从没参与过的人：
+
+```sh
+git config user.name "TRIP"
+git config user.email "1933142963@qq.com"   # 与 GitHub 账号绑定的邮箱
+git log -1 --format="%an <%ae>"             # 每次提交后确认作者
+```
+
+本仓库的 `.git/config` 已经固定了该身份。换机器或克隆到新目录后要重新设置，
+不要沿用系统或别的项目的默认身份（历史上出现过一次
+`trip <trip@users.noreply.github.com>`，已通过重写历史修正）。
+
 ### 本机工具链
+
 
 Homebrew 的 Rust 与未配置默认工具链的 rustup 并存时，`cargo clippy` / `cargo fmt`
 会被 rustup 的 shim 拦住并报 “could not choose a version of cargo-clippy”。用

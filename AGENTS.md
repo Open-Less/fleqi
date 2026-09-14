@@ -87,7 +87,7 @@ CI runs on every push to `beta`/`main` and on pull requests: `ci.yml` (frontend 
 
 ## Commit & Pull Request Guidelines
 
-Commit messages follow `类型(范围): 主题` with types `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`, imperative subjects, no trailing period, at most 100 characters for the header. Mark breaking changes with `!` plus a `BREAKING CHANGE:` footer. The same rules are enforced by `scripts/check-commits.mjs` in CI, so validate before pushing rather than relying on review. Pull requests should describe behavior, affected requirements, validation, and remaining limitations; include screenshots for UI changes under `docs/previews/`. Full rules live in `CONTRIBUTING.md`, and the automation map lives in `docs/engineering/Repository_and_CI.md`.
+Commit messages follow `类型(范围): 主题` with types `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`, imperative subjects, no trailing period, at most 100 characters for the header. Mark breaking changes with `!` plus a `BREAKING CHANGE:` footer. The same rules are enforced by `scripts/check-commits.mjs` in CI, so validate before pushing rather than relying on review. Commits must be authored as `TRIP <1933142963@qq.com>` (the repository owner's GitHub identity): check `git log -1 --format='%an <%ae>'` after committing, because a machine-default identity silently adds a phantom contributor to GitHub. Pull requests should describe behavior, affected requirements, validation, and remaining limitations; include screenshots for UI changes under `docs/previews/`. Full rules live in `CONTRIBUTING.md`, and the automation map lives in `docs/engineering/Repository_and_CI.md`.
 
 ## Architecture & Data Boundaries
 
