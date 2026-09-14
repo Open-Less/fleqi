@@ -5,6 +5,7 @@ import { BorderBeam } from 'border-beam';
 import { AssetIcon,SettingsIcon,SvgImage } from './icons';
 import { SlashMenu,slashOptions,type SlashOption } from './SlashMenu';
 import type { FleqiController } from './backend';
+import { operationLabels } from './backend';
 import type { Appearance } from './appearance';
 import { getMaterialSupport, nativeHost, updateNativeMaterial, type MaterialSupport } from './native';
 import { AppearancePanel } from './AppearancePanel';
@@ -103,6 +104,19 @@ export function AgentBar({ appearance, onAppearance, scene, layoutKey, live, con
   // 实时底栏展示 Finder 实际捕获的选区，用户提交前就能看到会处理哪些文件。
   const liveFiles=live?.files??[];
   const shownFiles=live?liveFiles:files;
+  // 任务进行中：快捷按钮收起、输入框收成圆圈转圈，空出的横条按顺序掠过工具调用。
+  const running=!!live?.busy&&!live?.answerMode;
+  const activeTask=controller?.snapshot?.tasks.find(t=>t.id===controller.snapshot?.activeTaskId)??null;
+  const ticked=useRef(0);
+  const [ticker,setTicker]=useState<string[]>([]);
+  useEffect(()=>{
+    const actions=activeTask?.actions??[];
+    if(!actions.length){ticked.current=0;setTicker([]);return;}
+    if(actions.length<ticked.current)ticked.current=0;
+    const fresh=actions.slice(ticked.current).map(action=>operationLabels[action.operation]??action.operation);
+    ticked.current=actions.length;
+    if(fresh.length)setTicker(current=>[...current,...fresh].slice(-5));
+  },[activeTask?.id,activeTask?.actions.length]);
 
   return (
     <div className="agent-region" data-theme={appearance.theme}>
@@ -119,15 +133,16 @@ export function AgentBar({ appearance, onAppearance, scene, layoutKey, live, con
       </Reveal>
       <Reveal show={menuOpen} edge="bottom" className="slash-reveal"><SlashMenu options={options} index={menuIndex} busy={commandBusy} onSelect={o=>void selectCommand(o)} onHover={setMenuIndex} onSettings={()=>controller?void controller.openSettings('models'):setOpen(true)}/></Reveal>
       <div ref={bar} className="agent-bar" data-native-material={nativeMaterial} data-testid="agent-bar">
-        <form onSubmit={submit} aria-label="Fleqi 文件操作" className="bar-controls">
+        <form onSubmit={submit} aria-label="Fleqi 文件操作" className="bar-controls" data-running={running?'true':undefined}>
           <button type="button" className="round-button add-button" aria-label="选择文件"
             title="选择文件" disabled={choosing||dispatching} onClick={async() => {if(live){setChoosing(true);try{await live.onChoose();}finally{setChoosing(false);}}else fileInput.current?.click();}}>{choosing?<LoaderCircle className="animate-spin"/>:<SvgImage name="plusCircleFill" size={22}/>}</button>
+          {running&&<div className="tool-strip" aria-hidden="true">{ticker.map((label,index)=><span className="tool-chip" key={`${label}-${index}`}>{label}</span>)}{!ticker.length&&<span className="tool-chip idle">正在准备…</span>}</div>}
           <input ref={fileInput} className="visually-hidden" type="file" multiple tabIndex={-1} aria-label="添加文件"
             onChange={(event) => { setFiles(Array.from(event.target.files ?? [], (file) => file.name)); event.target.value = ''; input.current?.focus(); }} />
           <BorderBeam className="command-beam" size="md" colorVariant="mono" strength={0.7} theme={appearance.theme} active={!reducedMotion} borderRadius={24}>
           <input ref={input} className="command-input" aria-label="输入文件操作指令"
             placeholder={live?.answerMode?'回复 agent…':'向 Fleqi 描述要整理、改名或转换的文件…'} value={text} maxLength={4000}
-            aria-controls={menuOpen?'slash-options':undefined} aria-expanded={menuOpen} aria-activedescendant={menuOpen&&options.length?`slash-option-${menuIndex}`:undefined} autoComplete="off" spellCheck={false} disabled={dispatching} onChange={(event) => { setText(event.target.value); setNotice(null);setMenuDismissed(false); }}
+            aria-controls={menuOpen?'slash-options':undefined} aria-expanded={menuOpen} aria-activedescendant={menuOpen&&options.length?`slash-option-${menuIndex}`:undefined} autoComplete="off" spellCheck={false} disabled={dispatching||running} onChange={(event) => { setText(event.target.value); setNotice(null);setMenuDismissed(false); }}
             onCompositionStart={() => { composing.current = true; }}
             onCompositionEnd={() => { composing.current = false; }}
             onKeyDown={(event) => {
@@ -139,6 +154,7 @@ export function AgentBar({ appearance, onAppearance, scene, layoutKey, live, con
               }
               if (event.key === 'Escape') { setNotice(null); input.current?.blur();if(live)void live.onHide(); }
             }} />
+          {running&&<LoaderCircle className="running-spinner animate-spin" aria-hidden="true"/>}
           </BorderBeam>
           <button type="submit" className={`send-button ${live?.answerMode?'reply':''}`} aria-label={live?.answerMode?'回复 agent':'发送指令'}
             disabled={!text.trim()||dispatching||(live?.busy&&!live?.answerMode)} title={live?.answerMode?'回复 agent':'发送指令'}>{(dispatching||(live?.busy&&!live?.answerMode))?<LoaderCircle className="animate-spin"/>:live?.answerMode?<span className="reply-label">回复</span>:<SvgImage name="paperplaneCircle" size={28} className="send-glyph"/>}</button>

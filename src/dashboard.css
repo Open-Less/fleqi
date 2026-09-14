@@ -134,7 +134,7 @@ html[data-surface='settings'],html[data-surface='settings'] body,html[data-surfa
 .appearance-mini i {height:23px;border:1px solid currentColor;opacity:.18;flex:1;border-radius:16px;}
 .task-row {padding:18px 20px;}
 .task-row+.task-row {border-top:1px solid var(--border);}
-.feedback-toast {position:fixed;z-index:100;bottom:18px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--popover);color:var(--popover-foreground);box-shadow:0 4px 18px #0002;max-width:min(550px,calc(100vw - 48px));font-size:12px;}
+.feedback-toast {position:fixed;z-index:100;bottom:18px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--popover);color:var(--popover-foreground);box-shadow:0 1px 4px #0002;max-width:min(550px,calc(100vw - 48px));font-size:12px;}
 .feedback-toast>svg {flex-shrink:0;}.feedback-toast>span {overflow-wrap:anywhere;max-height:160px;overflow:auto;line-height:1.7;}
 .settings-dialog .feedback-toast,.settings-window .feedback-toast {position:absolute;max-width:80%;}
 .asset-icon {display:inline-block;background:currentColor;mask:var(--icon-url) center/contain no-repeat;-webkit-mask:var(--icon-url) center/contain no-repeat;flex-shrink:0;}
@@ -157,7 +157,7 @@ html[data-surface='settings'],html[data-surface='settings'] body,html[data-surfa
 .task-strip>div {flex:1;min-width:0;}.task-strip strong {font-size:11px;font-weight:500;}.task-strip p {margin:5px 0 0;line-height:1.6;max-height:75px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;}
 .task-strip button,.live-context button,.bar-notice button {margin-left:auto;white-space:nowrap;color:var(--bar-secondary);}
 .task-strip progress {width:100%;height:4px;accent-color:#737373;}.live-context {font-size:10px;padding-block:7px;}.bar-notice {border-bottom:1px solid var(--field-border);}.bar-loading {font-size:12px;padding:10px 20px;background:#fafafa;color:#525252;}
-.agent-bubble {position:relative;margin:6px 8px 10px;padding:11px 16px;border-radius:16px;background:#1d1d20;backdrop-filter:none;color:#f5f5f7;font-size:12px;box-shadow:0 10px 30px #00000052;}
+.agent-bubble {position:relative;margin:6px 8px 10px;padding:11px 16px;border-radius:16px;background:#1d1d20;backdrop-filter:none;color:#f5f5f7;font-size:12px;box-shadow:0 1px 4px #00000033;}
 .agent-bubble::before {content:'';position:absolute;top:-4.5px;left:30px;width:11px;height:11px;border-radius:2px;background:#1d1d20;transform:rotate(45deg);}
 /* 气泡在底栏上方时，尾巴朝下指向底栏。 */
 .agent-bubble.above {margin:10px 8px 6px;}
@@ -176,7 +176,7 @@ html[data-surface='settings'],html[data-surface='settings'] body,html[data-surfa
 .reply-label {font-size:12px;font-weight:500;letter-spacing:.02em;}
 .tint-icon {display:inline-block;flex-shrink:0;background:var(--tint-light);mask:var(--icon-url) center/contain no-repeat;-webkit-mask:var(--icon-url) center/contain no-repeat;}
 .dark .tint-icon {background:var(--tint-dark);}
-.send-button {display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;flex:0 0 38px;border:none;border-radius:50%;background:transparent;color:var(--bar-ink,#111);cursor:pointer;padding:0;transition:transform .18s var(--motion-curve,cubic-bezier(.2,.8,.2,1)),opacity .18s ease;}
+.send-button {display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;flex:0 0 38px;border:none;border-radius:50%;background:transparent;color:var(--bar-ink,#111);cursor:pointer;padding:0;transition:transform .18s var(--motion-curve,cubic-bezier(.2,.8,.2,1)),opacity .18s ease,flex-basis var(--motion-layout) var(--motion-curve),width var(--motion-layout) var(--motion-curve),padding var(--motion-layout) var(--motion-curve);}
 .send-button .send-glyph {transition:transform .18s var(--motion-curve,cubic-bezier(.2,.8,.2,1));}
 .send-button:hover:not(:disabled) .send-glyph {transform:scale(1.12) translateY(-1px);}
 .send-button:active:not(:disabled) .send-glyph {transform:scale(.9);}
@@ -198,7 +198,7 @@ html[data-surface='settings'],html[data-surface='settings'] body,html[data-surfa
 .native-agent .context-popover {position:static;width:auto;max-width:none;margin:0 10px 5px;box-shadow:none;}
 .command-beam {flex:1;min-width:0;display:flex!important;border-radius:24px;}
 .command-beam .command-input {width:100%;display:block;}
-.slash-menu {margin:0 14px 8px;border:1px solid var(--border);border-radius:10px;background:var(--popover);color:var(--popover-foreground);box-shadow:0 5px 24px #0002;max-height:250px;overflow:auto;font-size:12px;scrollbar-width:thin;}
+.slash-menu {margin:0 14px 8px;border:1px solid var(--border);border-radius:10px;background:var(--popover);color:var(--popover-foreground);box-shadow:0 1px 3px #0002;max-height:250px;overflow:auto;font-size:12px;scrollbar-width:thin;}
 .slash-menu header {padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted-foreground);display:flex;justify-content:space-between;}
 .slash-menu [role='option'] {display:flex;gap:12px;align-items:center;justify-content:space-between;text-align:left;width:100%;padding:10px 14px;}
 .slash-menu [aria-selected='true'] {background:var(--accent);}.slash-menu strong {font-size:12px;font-weight:500;}.slash-menu small {color:var(--muted-foreground);font-size:11px;}.slash-menu [role='option']>span {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}

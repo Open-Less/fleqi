@@ -100,6 +100,10 @@ private final class FinderHost {
     var lastFrame: NSRect?
     var automatic = false
     var workspaceToken: NSObjectProtocol?
+    /// 上一次命中选中项的那个容器（outline/table/list）。Finder 的选区挂在很深的
+    /// 子视图上，每次都走整棵树太贵（最多 2500 次 AX 调用）。轮询时先问缓存下来的
+    /// 容器，命中就只要一两次属性读取，用来做 200ms 级的选区跟随。
+    var selectionAnchor: AXUIElement?
 
     init() {
         workspaceToken = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { _ in
@@ -254,7 +258,9 @@ private final class FinderHost {
             visited += 1
             let role = attribute(element, kAXRoleAttribute) as? String
             if role == kAXOutlineRole || role == kAXTableRole || role == kAXListRole {
-                for row in attribute(element, kAXSelectedRowsAttribute) as? [AXUIElement] ?? [] where !known(row) {
+                let selected = attribute(element, kAXSelectedRowsAttribute) as? [AXUIElement] ?? []
+                if !selected.isEmpty { selectionAnchor = element }
+                for row in selected where !known(row) {
                     rows.append(row)
                 }
             } else if role == kAXRowRole || role == kAXImageRole || role == kAXCellRole,
@@ -265,6 +271,41 @@ private final class FinderHost {
         }
         walk(window, 12)
         return rows
+    }
+    /// 候选选中项：先用缓存容器做一两次 AX 读取，未命中才退回整棵树。
+    func candidateRows(_ window: AXUIElement) -> [AXUIElement] {
+        if let anchor = selectionAnchor,
+           (attribute(anchor, kAXRoleAttribute) as? String).map({ $0 == kAXOutlineRole || $0 == kAXTableRole || $0 == kAXListRole }) == true,
+           let selected = attribute(anchor, kAXSelectedRowsAttribute) as? [AXUIElement], !selected.isEmpty {
+            return selected
+        }
+        return selectedRows(window)
+    }
+    /// 选中路径：按行取地址、去重、丢掉“列视图里被顺带选中的父目录”。
+    /// 在分栏视图里选中文件时，上一层分栏的当前目录也会处于选中态，
+    /// 不清理就会把整个文件夹一起当成待处理对象。
+    func selectionPaths(_ window: AXUIElement) -> [String] {
+        var files: [String] = []
+        for row in candidateRows(window) {
+            guard let path = rowURL(row)?.path, FileManager.default.fileExists(atPath: path), !files.contains(path) else { continue }
+            files.append(path)
+        }
+        if files.isEmpty { files = scriptSelection() }
+        let directories = Set(files.filter { path in
+            var isDirectory: ObjCBool = false
+            return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
+        })
+        guard !directories.isEmpty else { return files }
+        return files.filter { path in
+            guard directories.contains(path) else { return true }
+            return !files.contains { other in other != path && (other as NSString).deletingLastPathComponent == path }
+        }
+    }
+    /// 轻量选区读取：不含目录解析与窗口校验，供底栏高频轮询使用。
+    func selection() -> [String: Any] {
+        guard AXIsProcessTrusted() else { return ["error": "请先授予辅助功能权限"] }
+        guard let window = window() else { return ["error": "没有可关联的 Finder 窗口"] }
+        return ["files": selectionPaths(window)]
     }
     /// 目录来源：优先选中文件所在目录，其次窗口内任意项目的所在目录，
     /// 最后才回退到 AppleScript（因此 Finder 自动化权限是可选的）。
@@ -309,12 +350,7 @@ private final class FinderHost {
     func context() -> [String: Any] {
         guard AXIsProcessTrusted() else { return ["error": "请先授予辅助功能权限"] }
         guard let before = window(), let beforeFrame = frame(before) else { return ["error": "没有可关联的 Finder 窗口，请先打开 Finder"] }
-        var files: [String] = []
-        for row in selectedRows(before) {
-            guard let path = rowURL(row)?.path, FileManager.default.fileExists(atPath: path), !files.contains(path) else { continue }
-            files.append(path)
-        }
-        if files.isEmpty { files = scriptSelection() }
+        let files = selectionPaths(before)
         guard let directory = windowDirectory(before, files: files) else { return ["error": "无法读取 Finder 当前目录，请先在窗口中选中文件或授予 Finder 自动化权限"] }
         guard let after = window(), CFEqual(before, after), let afterFrame = frame(after), close(beforeFrame, afterFrame) else { return ["error": "Finder 窗口或选区在捕获期间发生变化，请重新提交"] }
         let windowID = attribute(before, kAXIdentifierAttribute) as? String ?? String(CFHash(before))
@@ -422,6 +458,7 @@ public func fleqiHostCommand(_ pointer: UnsafePointer<CChar>?) -> UnsafeMutableP
         case "motion_config": FleqiMotion.configure(request["config"] as? [String:Any] ?? [:]);return jsonResult(["ok":true])
         case "permissions": return jsonResult(host.permissions())
         case "context": return jsonResult(host.context())
+        case "selection": return jsonResult(host.selection())
         case "show": return jsonResult(host.show())
         case "hide": host.hide(); return jsonResult(["ok":true])
         case "status": return jsonResult(["requested":host.requested,"visible":host.panel?.isVisible ?? false])

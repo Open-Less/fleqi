@@ -30,6 +30,13 @@ export interface Snapshot {
 export const terminalStates=new Set(['completed','partial','failed','cancelled','needs_review']);
 export const statusLabels:Record<string,string>={checking:'检查对象',waiting_model:'等待模型',awaiting_input:'待补充',awaiting_confirmation:'待确认',running:'执行中',verifying:'核验中',completed:'已完成',partial:'部分完成',failed:'失败',cancelled:'已取消',needs_review:'待核对'};
 export const thinkingLabels:Record<string,string>={default:'模型默认',off:'关闭',minimal:'最低',low:'低',medium:'中',high:'高',xhigh:'更高',max:'最高',ultra:'超高'};
+/** 文件操作的中文名：任务面板与底栏的工具条共用同一份。 */
+export const operationLabels:Record<string,string>={
+  rename:'改名',copy:'复制',move:'移动',create_directory:'新建文件夹',write_text:'写入文本',read_text:'读取文本',
+  zip_create:'打包 ZIP',zip_extract:'解压',image_convert:'图片转换',media_convert:'音视频转换',media_trim:'裁剪',
+  media_extract_audio:'提取音频',pdf_merge:'合并 PDF',pdf_split:'拆分 PDF',pdf_extract:'提取页面',pdf_rotate:'旋转 PDF',
+  pdf_compress:'压缩 PDF',docx_create:'生成 DOCX',docx_read:'读取 DOCX',trash:'移到废纸篓',inspect:'检查',list:'列出',open:'打开',reveal:'显示位置',copy_path:'复制路径',
+};
 export const settingsPages=['general','appearance','models','permissions','files','tasks','about'];
 const previewKey='fleqi.dashboard.preview.v1';
 const defaults:SettingsSnapshot={revision:0,appearance:readAppearance(),launchAtLogin:false,barEnabled:true,activation:'manual',shortcut:'Control+Alt+Space',defaultProfileId:null,outputDirectory:null,conflictPolicy:'rename',bubbleSeconds:6.0};
