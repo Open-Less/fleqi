@@ -1,0 +1,62 @@
+/* 弹出内容只有一个定位容器。底栏始终贴住视口底边，原生窗口只向上扩展。 */
+.native-agent { position: relative; height: 100dvh; min-height: 0; padding: 0; overflow: visible; }
+.live-region { position: absolute; bottom: 0; inset-inline: 0; width: 100%; }
+.bar-overlays { position: absolute; z-index: 8; bottom: calc(100% + 8px); left: 20px; right: 20px; max-height: var(--overlay-max-height, calc(100dvh - 84px)); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.bar-overlays:empty { pointer-events: none; }
+.bar-overlays .context-reveal { position: static; overflow: hidden; }
+.bar-overlays .context-reveal .motion-size { overflow: hidden; }
+.bar-overlays .context-popover, .native-agent .bar-overlays .context-popover { position: static; width: fit-content; max-width: 100%; margin: 4px 0; padding: 10px 12px; }
+.bar-overlays .slash-menu { margin: 4px 0; max-height: min(280px, var(--overlay-max-height, calc(100dvh - 100px))); border-radius: 16px; }
+.conversation-scroll { display: flex; flex-direction: column; gap: 12px; padding: 6px 8px; width: min(620px, 100%); margin-left: auto; }
+.chat-row { display: flex; min-width: 0; }
+.chat-row.user { justify-content: flex-end; }
+.chat-row.assistant { justify-content: flex-start; }
+.chat-bubble { position: relative; min-width: 0; max-width: calc(100% - 28px); border: 1px solid var(--field-border); border-radius: 16px; padding: 12px 16px; font-size: 13px; line-height: 1.65; color: var(--bar-ink); box-shadow: 0 1px 3px #00000014; }
+.chat-bubble.user { background: #e2ebdf; color: #24342a; border-color: #c7d4c4; border-top-right-radius: 4px; }
+.chat-bubble.assistant { background: var(--panel-fill); border-top-left-radius: 4px; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+[data-theme='dark'] .chat-bubble.user { background: #293d31; color: #e7f1e8; border-color: #405247; }
+.chat-bubble p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-heading { display: flex; align-items: center; gap: 7px; color: var(--bar-secondary); font-size: 11px; margin-bottom: 6px; }
+.chat-heading .small-icon { margin: -4px -8px -4px auto; }
+.native-agent .chat-bubble .interaction-card { margin: 0; padding: 0; background: none; border: 0; color: inherit; border-radius: 0; }
+.chat-bubble .interaction-card > p { margin: 6px 0 12px; }
+.chat-bubble .answer-form { min-width: 0; align-items: center; }
+.chat-bubble .answer-form input { min-width: 0; flex: 1; width: 260px; font-size: 13px; }
+.chat-bubble .answer-form button { flex-shrink: 0; }
+.panel-notice { display: flex; align-items: flex-start; gap: 10px; max-width: 600px; margin: 4px 0 4px auto; padding: 10px 14px; border-radius: 14px; background: var(--panel-fill); border: 1px solid var(--field-border); font-size: 12px; color: var(--bar-ink); overflow-wrap: anywhere; }
+.panel-notice > span { min-width: 0; }
+.panel-notice > button { margin-left: auto; flex-shrink: 0; }
+
+/* 输入框右边沿不动，宽度缓慢收拢。所有相邻控件保留原槽位，避免 flex 突变。 */
+.agent-region { --composer-height: 43px; }
+.native-agent .agent-region { --composer-height: 34px; }
+.composer-track { position: relative; height: var(--composer-height); flex: 1; min-width: 0; }
+.composer-track .command-beam { position: absolute; inset-block: 0; right: 0; width: 100%; height: var(--composer-height); border-radius: 24px; transition: width var(--motion-composer) var(--motion-curve), border-radius var(--motion-composer) var(--motion-curve); }
+.composer-track .command-input, .native-agent .composer-track .command-input { height: 100%; width: 100%; transition: opacity var(--motion-feedback) var(--motion-curve), padding var(--motion-composer) var(--motion-curve), border-radius var(--motion-composer) var(--motion-curve); }
+.bar-controls[data-running] .add-button, .bar-controls[data-running] .send-button, .bar-controls[data-running] .bar-divider { opacity: 0; pointer-events: none; transform: none; }
+.bar-controls[data-running] .composer-track .command-beam { width: var(--composer-height); border-radius: 50%; flex: none; }
+.bar-controls[data-running] .composer-track .command-input { padding: 0; opacity: 0; border-radius: 50%; }
+.running-control { position: absolute; inset: 0; display: grid; place-items: center; border: 1px solid var(--field-border); border-radius: 50%; background: var(--field-fill); padding: 0; color: var(--bar-ink); }
+.running-control .running-spinner { position: static; width: 18px; height: 18px; margin: 0; color: var(--bar-ink); animation-timing-function: linear !important; }
+.running-control .stop-glyph { position: absolute; opacity: 0; }
+.running-control:not(:disabled):hover .running-spinner, .running-control:focus-visible .running-spinner { opacity: .25; }
+.running-control:not(:disabled):hover .stop-glyph, .running-control:focus-visible .stop-glyph { opacity: 1; }
+.progress-slot { position: absolute; inset: -5px calc(var(--composer-height) + 14px) -5px 0; opacity: 0; pointer-events: none; transition: opacity var(--motion-menu) var(--motion-curve); }
+.progress-slot[data-visible] { opacity: 1; transition-delay: .16s; }
+.work-progress { position: relative; display: flex; flex-direction: column; justify-content: center; height: 100%; gap: 1px; border-radius: 12px; padding: 3px 10px; background: rgb(255 255 255 / 30%); overflow: hidden; }
+[data-theme='dark'] .work-progress { background: rgb(140 140 145 / 30%); }
+.work-phase { display: flex; align-items: center; gap: 6px; color: var(--bar-ink); font-size: 12px; font-weight: 500; line-height: 17px; }
+.work-indicator { width: 12px; height: 12px; display: grid; place-items: center; }
+.work-indicator i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; animation: status-pulse 1.6s ease-in-out infinite; }
+.work-count { margin-left: auto; color: var(--bar-secondary); font-size: 10px; font-variant-numeric: tabular-nums; }
+.tool-strip { position: relative; min-width: 0; height: 17px; overflow: hidden; mask-image: linear-gradient(90deg, transparent, #000 8px, #000 calc(100% - 12px), transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 8px, #000 calc(100% - 12px), transparent); }
+.tool-marquee { display: flex; width: max-content; min-width: 200%; animation: fleqi-tools-right 18s linear infinite; }
+.tool-batch { display: flex; flex: 1 0 auto; align-items: center; justify-content: space-around; gap: 22px; padding-right: 22px; }
+.tool-chip { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; color: var(--bar-secondary); font-size: 10px; line-height: 17px; white-space: nowrap; }
+.tool-chip[data-status='failed'] { color: #bc4d3c; }
+.work-detail { display: block; color: var(--bar-secondary); font-size: 10px; line-height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@keyframes fleqi-tools-right { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+@media (max-width: 800px) { .agent-region { --composer-height: 39px; } }
+@media (max-width: 520px) { .agent-region { --composer-height: 35px; } .bar-overlays { left: 10px; right: 10px; } .native-agent .bar-controls { padding-inline: 10px; gap: 9px; } .chat-bubble { padding: 10px 12px; max-width: calc(100% - 12px); } .work-phase { font-size: 11px; } .progress-slot { right: calc(var(--composer-height) + 8px); } }
+@media (prefers-reduced-motion: reduce) { .composer-track .command-beam, .progress-slot { transition: none; } .tool-marquee, .running-control .running-spinner, .work-indicator i { animation: none !important; } .tool-marquee { min-width: 100%; transform: none; } .tool-batch:nth-child(2) { display: none; } }
+@media (prefers-reduced-transparency: reduce) { .work-progress { background: #eceeee; } [data-theme='dark'] .work-progress { background: #303033; } }

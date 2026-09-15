@@ -1,18 +1,19 @@
 import { Reveal } from './motion';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowUpRight, LoaderCircle, X } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { ArrowUpRight, LoaderCircle, Square, X } from 'lucide-react';
 import { BorderBeam } from 'border-beam';
 import { AssetIcon,SettingsIcon,SvgImage } from './icons';
 import { SlashMenu,slashOptions,type SlashOption } from './SlashMenu';
 import type { FleqiController } from './backend';
-import { operationLabels } from './backend';
+import type { TaskRecord } from './backend';
+import { WorkProgress } from './WorkProgress';
 import type { Appearance } from './appearance';
 import { getMaterialSupport, nativeHost, updateNativeMaterial, type MaterialSupport } from './native';
 import { AppearancePanel } from './AppearancePanel';
 
-interface Props { appearance: Appearance; onAppearance: (value: Partial<Appearance>) => void; scene: boolean; layoutKey?:string; onMenuOpenChange?:(open:boolean)=>void; controller?:FleqiController; live?: {busy:boolean;files?:string[];explicit?:boolean;onClearFiles?:()=>Promise<unknown>;onSubmit:(text:string)=>Promise<unknown>;onChoose:()=>Promise<unknown>;onSettings:()=>Promise<unknown>;onHide:()=>Promise<unknown>;answerMode?:boolean;onSubmitAnswer?:(text:string)=>Promise<unknown>} }
+interface Props { appearance: Appearance; onAppearance: (value: Partial<Appearance>) => void; scene: boolean; layoutKey?:string; onMenuOpenChange?:(open:boolean)=>void; controller?:FleqiController; conversation?:ReactNode; live?: {busy:boolean;task?:TaskRecord|null;waiting?:boolean;onCancel?:()=>Promise<unknown>;explicit?:boolean;onClearFiles?:()=>Promise<unknown>;onSubmit:(text:string)=>Promise<unknown>;onChoose:()=>Promise<unknown>;onSettings:()=>Promise<unknown>;onHide:()=>Promise<unknown>} }
 
-export function AgentBar({ appearance, onAppearance, scene, layoutKey, live, controller,onMenuOpenChange }: Props) {
+export function AgentBar({ appearance, onAppearance, scene, layoutKey, live, controller,onMenuOpenChange,conversation }: Props) {
   const bar = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -87,12 +88,6 @@ export function AgentBar({ appearance, onAppearance, scene, layoutKey, live, con
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (composing.current || !text.trim() || submitting.current) return;
-    // agent 追问时，主输入框直接作为“回复”通道，一键回给 agent。
-    if (live?.answerMode && live.onSubmitAnswer) {
-      submitting.current = true;setDispatching(true);
-      try { await live.onSubmitAnswer(text);setText('');setNotice(null); } catch (error) { setNotice(String(error)); } finally { submitting.current = false;setDispatching(false); }
-      return;
-    }
     if (live?.busy) return;
     if(text.startsWith('/')){if(menuOpen&&options[menuIndex])await selectCommand(options[menuIndex]);else {setMenuDismissed(false);setNotice('请从斜杠菜单选择已注册的命令。');}return;}
     if(live){submitting.current=true;setDispatching(true);try{await live.onSubmit(text);setText('');setNotice(null);}catch(error){setNotice(String(error));}finally{submitting.current=false;setDispatching(false);}return;}
@@ -101,27 +96,15 @@ export function AgentBar({ appearance, onAppearance, scene, layoutKey, live, con
   };
 
   const closeSettings = () => { setOpen(false); };
-  // 选中就是选中：访达选区不再在底栏上方重复展示。只有手动通过 `+` 选文件时，
-  // `+` 变成 ×（点击清除、回到跟随访达），并在按钮角标上显示数量。
-  const liveFiles=live?.files??[];
-  const shownFiles=live?liveFiles:files;
+  // Finder 选区只进入上下文；手动选文件时仅保留清除入口，不展示名称或数量。
   const explicit=live?!!live.explicit:files.length>0;
-  // 任务进行中：快捷按钮收起、输入框收成圆圈转圈，空出的横条按顺序掠过工具调用。
-  const running=!!live?.busy&&!live?.answerMode;
-  const activeTask=controller?.snapshot?.tasks.find(t=>t.id===controller.snapshot?.activeTaskId)??null;
-  const ticked=useRef(0);
-  const [ticker,setTicker]=useState<string[]>([]);
-  useEffect(()=>{
-    const actions=activeTask?.actions??[];
-    if(!actions.length){ticked.current=0;setTicker([]);return;}
-    if(actions.length<ticked.current)ticked.current=0;
-    const fresh=actions.slice(ticked.current).map(action=>operationLabels[action.operation]??action.operation);
-    ticked.current=actions.length;
-    if(fresh.length)setTicker(current=>[...current,...fresh].slice(-5));
-  },[activeTask?.id,activeTask?.actions.length]);
+  const running=dispatching||!!live?.busy;
+  const [cancelling,setCancelling]=useState(false);
+  const cancel=async()=>{if(!live?.onCancel||cancelling)return;setCancelling(true);try{await live.onCancel();}catch(error){setNotice(String(error));}finally{setCancelling(false);}};
 
   return (
     <div className="agent-region" data-theme={appearance.theme}>
+      <div className="bar-overlays">
       <Reveal show={!!notice} edge="bottom" className="context-reveal">
         <div className="context-popover" role="status">
           {notice && <div className="notice"><ArrowUpRight size={15} /><span>{notice}</span>
@@ -130,21 +113,26 @@ export function AgentBar({ appearance, onAppearance, scene, layoutKey, live, con
         </div>
       </Reveal>
       <Reveal show={menuOpen} edge="bottom" className="slash-reveal"><SlashMenu options={options} index={menuIndex} busy={commandBusy} onSelect={o=>void selectCommand(o)} onHover={setMenuIndex} onSettings={()=>controller?void controller.openSettings('models'):setOpen(true)}/></Reveal>
+      {!menuOpen&&conversation}
+      </div>
       <div ref={bar} className="agent-bar" data-native-material={nativeMaterial} data-testid="agent-bar">
         <form onSubmit={submit} aria-label="Fleqi 文件操作" className="bar-controls" data-running={running?'true':undefined}>
           <button type="button" className="round-button add-button" aria-label={explicit?'清除所选文件':'选择文件'}
-            title={explicit?'清除所选文件，回到跟随访达选区':'选择文件'} disabled={choosing||dispatching}
+            title={explicit?'清除所选文件，回到跟随访达选区':'选择文件'} disabled={choosing||running} tabIndex={running?-1:undefined} aria-hidden={running||undefined}
             onClick={async() => {
               if(explicit){if(live?.onClearFiles)await live.onClearFiles();else setFiles([]);return;}
               if(live){setChoosing(true);try{await live.onChoose();}finally{setChoosing(false);}}else fileInput.current?.click();
             }}>{choosing?<LoaderCircle className="animate-spin"/>:explicit?<X size={18}/>:<SvgImage name="plusCircleFill" size={22}/>}
-            {shownFiles.length>0&&<span className="add-badge" aria-hidden="true">{shownFiles.length>99?'99+':shownFiles.length}</span>}</button>
-          {running&&<div className="tool-strip" aria-hidden="true">{ticker.map((label,index)=><span className="tool-chip" key={`${label}-${index}`}>{label}</span>)}{!ticker.length&&<span className="tool-chip idle">正在准备…</span>}</div>}
+            </button>
+
           <input ref={fileInput} className="visually-hidden" type="file" multiple tabIndex={-1} aria-label="添加文件"
             onChange={(event) => { setFiles(Array.from(event.target.files ?? [], (file) => file.name)); event.target.value = ''; input.current?.focus(); }} />
+          <div className="composer-track">
+          <div className="progress-slot" data-visible={running||undefined}>{running&&<WorkProgress task={live?.task} waiting={live?.waiting}/>}</div>
           <BorderBeam className="command-beam" size="md" colorVariant="mono" strength={0.7} theme={appearance.theme} active={!reducedMotion} borderRadius={24}>
           <input ref={input} className="command-input" aria-label="输入文件操作指令"
-            placeholder={live?.answerMode?'回复 agent…':'向 Fleqi 描述要整理、改名或转换的文件…'} value={text} maxLength={4000}
+            tabIndex={running?-1:undefined} aria-hidden={running||undefined}
+            placeholder="向 Fleqi 描述要整理、改名或转换的文件…" value={text} maxLength={4000}
             aria-controls={menuOpen?'slash-options':undefined} aria-expanded={menuOpen} aria-activedescendant={menuOpen&&options.length?`slash-option-${menuIndex}`:undefined} autoComplete="off" spellCheck={false} disabled={dispatching||running} onChange={(event) => { setText(event.target.value); setNotice(null);setMenuDismissed(false); }}
             onCompositionStart={() => { composing.current = true; }}
             onCompositionEnd={() => { composing.current = false; }}
@@ -157,10 +145,13 @@ export function AgentBar({ appearance, onAppearance, scene, layoutKey, live, con
               }
               if (event.key === 'Escape') { setNotice(null); input.current?.blur();if(live)void live.onHide(); }
             }} />
-          {running&&<LoaderCircle className="running-spinner animate-spin" aria-hidden="true"/>}
+          {running&&<button type="button" className="running-control" aria-label={live?.waiting?'停止等待并取消任务':'停止任务'} disabled={!live?.onCancel||cancelling} onClick={()=>void cancel()}>
+            <LoaderCircle className="running-spinner animate-spin" aria-hidden="true"/><Square className="stop-glyph" size={12} fill="currentColor" aria-hidden="true"/>
+          </button>}
           </BorderBeam>
-          <button type="submit" className={`send-button ${live?.answerMode?'reply':''}`} aria-label={live?.answerMode?'回复 agent':'发送指令'}
-            disabled={!text.trim()||dispatching||(live?.busy&&!live?.answerMode)} title={live?.answerMode?'回复 agent':'发送指令'}>{(dispatching||(live?.busy&&!live?.answerMode))?<LoaderCircle className="animate-spin"/>:live?.answerMode?<span className="reply-label">回复</span>:<SvgImage name="paperplaneCircle" size={28} className="send-glyph"/>}</button>
+          </div>
+          <button type="submit" className="send-button" aria-label="发送指令"
+            aria-hidden={running||undefined} tabIndex={running?-1:undefined} disabled={!text.trim()||running} title="发送指令">{dispatching?<LoaderCircle className="animate-spin"/>:<SvgImage name="paperplaneCircle" size={28} className="send-glyph"/>}</button>
           <span className="bar-divider" aria-hidden="true" />
           <button ref={settings} type="button" className="round-button settings-button" aria-label={live?'设置':'外观设置'}
             aria-haspopup="dialog" aria-expanded={open} title="设置" onClick={() => live?void live.onSettings():setOpen(true)}><SettingsIcon /></button>

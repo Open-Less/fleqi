@@ -55,15 +55,16 @@ test('IME confirmation does not submit and preview never claims file execution',
   await expect(input).toHaveValue('把图片转为 JPG');
 });
 
-test('selected files show only as a badge on the plus button, which becomes a clear control', async ({ page }) => {
+test('selected files stay private and the plus button offers a clear control', async ({ page }) => {
   await page.goto('/?surface=preview');
   await expect(page.getByRole('button', { name: '选择文件' })).toBeVisible();
   await page.getByLabel('添加文件').setInputFiles([
     { name: '中文 图片.png', mimeType: 'image/png', buffer: Buffer.from('fixture') },
     { name: '第二张.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('fixture') },
   ]);
-  // 选中即上下文：不在底栏上方重复展示，只体现在 `+` 的角标与按钮形态上。
-  await expect(page.locator('.add-badge')).toHaveText('2');
+  // 选区只作为上下文，不显示文件名或数量。
+  await expect(page.locator('.add-badge')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText('中文 图片.png');
   await expect(page.locator('.file-context')).toHaveCount(0);
   await expect(page.getByRole('status')).toHaveCount(0);
   const clear = page.getByRole('button', { name: '清除所选文件' });
@@ -129,6 +130,7 @@ test('running state folds the input into a spinner circle and sweeps tools acros
   await expect(strip).toBeVisible();
   const stripBox=await strip.boundingBox();
   expect(stripBox!.x).toBeLessThan(beamBox!.x);
-  await expect(strip.locator('.tool-chip')).toHaveCount(1);
-  await expect(bar.getByRole('textbox',{name:'输入文件操作指令'})).toBeDisabled();
+  await expect(strip.locator('.tool-chip')).toHaveCount(0);
+  await expect(bar.locator('.work-phase')).toHaveText('Thinking');
+  await expect(bar.locator('.command-input')).toBeDisabled();
 });

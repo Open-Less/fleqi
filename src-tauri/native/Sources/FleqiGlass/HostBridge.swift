@@ -455,6 +455,14 @@ public func fleqiHostCommand(_ pointer: UnsafePointer<CChar>?) -> UnsafeMutableP
     let work = { @MainActor () -> UnsafeMutablePointer<CChar>? in
         let host=FinderHost.shared
         switch request["operation"] as? String {
+        case "github_auth_open":
+            guard let id=request["flowId"] as? String,UUID(uuidString:id) != nil else{return jsonResult(["error":"登录请求无效"])}
+            return GitHubAuthorization.shared.open(flowID:id) ? jsonResult(["ok":true]) : jsonResult(["error":"无法打开 GitHub 授权窗口，请重试"])
+        case "github_auth_status":
+            return jsonResult(["open":GitHubAuthorization.shared.isOpen(flowID:request["flowId"] as? String ?? "")])
+        case "github_auth_close":
+            GitHubAuthorization.shared.close(flowID:request["flowId"] as? String ?? "")
+            return jsonResult(["ok":true])
         case "motion_config": FleqiMotion.configure(request["config"] as? [String:Any] ?? [:]);return jsonResult(["ok":true])
         case "permissions": return jsonResult(host.permissions())
         case "context": return jsonResult(host.context())

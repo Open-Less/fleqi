@@ -27,7 +27,7 @@ Invoke from the frontend with `backend<T>(command, args)` in `src/backend.ts`; a
 - Materials: `material_support`, `apply_material`
 - Snapshot and settings: `app_snapshot`, `settings_save`, `import_appearance`
 - Model profiles and auth: `profile_save`, `profile_delete`, `profile_logout`, `profile_run`, `auth_open`
-- GitHub and updates: `github_status`, `github_login_start`, `github_login_poll`, `github_login_token`, `github_open_tokens`, `github_logout`, `update_check`, `update_install`
+- GitHub and updates: `github_status`, `github_login_start`, `github_login_poll`, `github_login_cancel`, `github_logout`, `update_check`, `update_install`
 - Context and files: `context_capture`, `context_peek`, `context_clear`, `choose_files`, `choose_directory`, `result_reveal`
 - Tasks: `task_submit`, `task_cancel`, `interaction_answer`, `runtime_cancel`, `history_clear`
 - Permissions and diagnostics: `permissions_request`, `permissions_check`, `selftest_start`, `engines_check`, `diagnostics_export`

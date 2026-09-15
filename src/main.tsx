@@ -7,6 +7,7 @@ import { App } from './App';
 import './shadcn.css';
 import './styles.css';
 import './motion.css';
+import './agent-panel.css';
 
 installMotionOrigins();
 document.documentElement.style.setProperty('--motion-curve',`cubic-bezier(${tokens.curve.join(',')})`);

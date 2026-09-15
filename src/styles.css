@@ -49,9 +49,8 @@ html[data-native-backdrop='true'] .scene-background { display: none; }
 .round-button:hover:not(:disabled) { background: var(--control-hover); }
 .round-button:active:not(:disabled) { transform: scale(.94); }
 .add-button svg { width: 25px; height: 25px; stroke-width: 1.9; }
-/* 选中数量只以角标形式出现在 `+` 上；选中即上下文，不再在底栏上方重复展示。 */
+/* 手动选区的清除入口保留在原按钮内。 */
 .add-button { position: relative; }
-.add-badge { position: absolute; top: -3px; right: -3px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: #2f6fe4; color: #fff; font-size: 10px; font-weight: 600; line-height: 1; display: grid; place-items: center; pointer-events: none; border: 1px solid var(--bar-border); }
 .send-button svg { width: 20px; height: 20px; stroke-width: 2.25; transform: translate(-1px, 1px); }
 .send-button:disabled { opacity: .45; }
 .settings-button svg { width: 23px; height: 23px; stroke-width: 2.2; }
@@ -110,34 +109,4 @@ html[data-surface='bar']:not([data-native='true']) body { background: #b9d3f5; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
 @media (prefers-reduced-transparency: reduce) { .agent-bar::before { backdrop-filter: none; -webkit-backdrop-filter: none; background: #eaf2fc; } [data-theme='dark'] .agent-bar::before { background: #111318; } }
 
-}
-
-/* ——— 以下规则刻意写在层外：本文件主体在 @layer components 内，层级的规则会被
-   motion.css（.motion-reveal 裁剪）与 dashboard.css（.send-button 等）的无层级
-   规则压住，浮层放开与运行态收拢必须赢过它们，所以放在层外。 ——— */
-
-/* 文件选择是绝对定位浮层，揭示动画的两层容器（motion-reveal/motion-size，定义在
-   更靠后加载的 motion.css）默认 overflow:hidden，会把整个浮层裁掉；必须比它们更高一级
-   地放开。原生底栏里浮层是排流内容（position:static），保留裁剪才有展开动画。 */
-.motion-reveal.context-reveal, .motion-reveal.context-reveal .motion-size { overflow: visible; }
-.native-agent .motion-reveal.context-reveal, .native-agent .motion-reveal.context-reveal .motion-size { overflow: hidden; }
-
-.command-beam { position: relative; transition: flex-basis var(--motion-layout) var(--motion-curve); }
-/* 任务进行中：辅助按钮原地收拢消失，输入框向右侧缩成一个转圈的圆，
-   空出来的整条左侧作为工具调用掠影区，底栏本体位置不变。 */
-.bar-controls[data-running] .add-button, .bar-controls[data-running] .send-button, .bar-controls[data-running] .bar-divider { flex-basis: 0; width: 0; min-width: 0; margin: 0; padding: 0; border-width: 0; opacity: 0; transform: scale(.2); pointer-events: none; overflow: hidden; }
-.bar-controls[data-running] .command-beam { flex: 0 0 var(--button-size); }
-.bar-controls[data-running] .command-input { flex: 0 0 auto; height: var(--button-size); border-radius: 50%; padding: 0; color: transparent; caret-color: transparent; transition: height var(--motion-layout) var(--motion-curve), border-radius var(--motion-layout) var(--motion-curve), padding var(--motion-layout) var(--motion-curve); }
-.bar-controls[data-running] .command-input::placeholder { color: transparent; }
-.running-spinner { position: absolute; inset: 0; margin: auto; width: 18px; height: 18px; color: var(--bar-secondary); pointer-events: none; }
-/* 新的工具调用从圆圈一侧浮出、整排向左侧渐隐掠过；条尾（左端）用蒙版淡出。 */
-.tool-strip { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 16%); mask-image: linear-gradient(90deg, transparent, #000 16%); }
-.tool-chip { flex: 0 0 auto; font-size: 11px; line-height: 1.4; color: var(--bar-secondary); background: var(--field-fill); border: 1px solid var(--field-border); border-radius: 12px; padding: 3px 10px; white-space: nowrap; animation: fleqi-tool-sweep var(--motion-layout) var(--motion-curve); }
-@keyframes fleqi-tool-sweep { from { opacity: 0; transform: translateX(14px); } 60% { opacity: 1; } to { opacity: .9; transform: none; } }
-.tool-chip.idle { animation: fleqi-tool-breathe 1.4s ease-in-out infinite; }
-@keyframes fleqi-tool-breathe { 50% { opacity: .35; } }
-/* “减少动态效果”下动画冻结：工作指示必须仍然可感知，圆圈转圈改为呼吸闪烁。 */
-@media (prefers-reduced-motion: reduce) {
-  .running-spinner { animation: status-pulse 1.1s ease-in-out infinite !important; }
-  .tool-chip.idle { animation: status-pulse 1.4s ease-in-out infinite !important; }
 }

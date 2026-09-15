@@ -1,270 +1,438 @@
-//! GitHub 账号登录（OAuth 设备码流程）。
-//!
-//! 所有请求只发往固定的 GitHub 官方主机；每次请求前校验协议与主机名，拒绝
-//! 环回、私有和保留地址。访问令牌只保存在系统凭据存储中，不进入日志或诊断。
+//! GitHub App 浏览器授权。设备码仅由宿主持有，网络轮询不依赖设置窗口的生命周期。
+//! 用户在系统授权弹窗登录 GitHub；个人访问令牌不再作为登录入口。
+use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
     sync::Mutex,
     time::{Duration, Instant},
 };
 
-/// 由 GitHub OAuth 应用提供；留空时界面会提示先按文档创建应用。
 const CLIENT_ID: &str = match option_env!("FLEQI_GITHUB_CLIENT_ID") {
     Some(value) => value,
-    None => "",
+    None => "Iv23liy1Kop6o7aIC6Ns",
 };
-const SCOPE: &str = "read:user";
 const ACCOUNT: &str = "github";
 const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
 const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
 const USER_URL: &str = "https://api.github.com/user";
 const VERIFY_URL: &str = "https://github.com/login/device";
-/// 令牌创建页，已预填只读用户信息所需的最小权限。
-const TOKENS_URL: &str =
-    "https://github.com/settings/tokens/new?scopes=read:user&description=Fleqi";
 static FLOW: Mutex<Option<Flow>> = Mutex::new(None);
 
+#[derive(Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum Phase {
+    Starting,
+    Waiting,
+    Authorized,
+    Cancelled,
+    Expired,
+    Failed,
+}
+
 struct Flow {
+    id: String,
+    phase: Phase,
     device_code: String,
+    user_code: String,
     interval: u64,
     expires_at: Instant,
+    expires_at_ms: u64,
+    message: Option<String>,
+}
+impl Flow {
+    fn new(id: String) -> Self {
+        Self {
+            id,
+            phase: Phase::Starting,
+            device_code: String::new(),
+            user_code: String::new(),
+            interval: 5,
+            expires_at: Instant::now() + Duration::from_secs(900),
+            expires_at_ms: fleqi_core::now_ms() + 900_000,
+            message: None,
+        }
+    }
+    fn active(&self, id: &str) -> bool {
+        self.id == id
+            && matches!(self.phase, Phase::Starting | Phase::Waiting)
+            && Instant::now() < self.expires_at
+    }
+    fn public(&self) -> Value {
+        json!({"id":self.id,"status":self.phase,"userCode":self.user_code,"expiresAt":self.expires_at_ms,"message":self.message})
+    }
+    fn finish(&mut self, phase: Phase, message: Option<String>) {
+        self.phase = phase;
+        self.message = message;
+        self.device_code.clear();
+        self.user_code.clear();
+    }
 }
 
 pub fn configured() -> bool {
-    !CLIENT_ID.is_empty()
+    !CLIENT_ID.trim().is_empty()
 }
 
-/// 登录方式：配好 OAuth 应用走设备码；否则界面提供令牌登录兜底。
-pub fn mode() -> &'static str {
-    if configured() { "device" } else { "token" }
-}
-
-/// 只允许 https 且主机名完全等于白名单条目的地址，其他一律拒绝。
 fn allowed(endpoint: &str, hosts: &[&str]) -> Result<reqwest::Url, String> {
-    let url = reqwest::Url::parse(endpoint).map_err(|_| "GitHub 地址无效".to_string())?;
-    if url.scheme() != "https" {
-        return Err("只允许 https 地址".into());
+    let url = reqwest::Url::parse(endpoint).map_err(|_| "GitHub 地址无效")?;
+    if url.scheme() != "https"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
+        || url.port_or_known_default() != Some(443)
+        || !url.host_str().is_some_and(|host| hosts.contains(&host))
+    {
+        return Err("GitHub 地址不在允许的范围内".into());
     }
-    match url.host_str() {
-        Some(host) if hosts.contains(&host) => Ok(url),
-        _ => Err("GitHub 地址不在允许的主机列表内".into()),
-    }
+    Ok(url)
 }
-
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
+        .redirect(reqwest::redirect::Policy::none())
         .user_agent("Fleqi")
         .build()
-        .map_err(|error| format!("网络客户端不可用：{error}"))
+        .map_err(|_| "网络客户端不可用".into())
 }
-
-fn stored() -> Option<Value> {
-    crate::platform::credential("read", ACCOUNT, None)
-        .ok()
-        .filter(|v| !v.is_null())
+fn valid_secret(value: &str) -> bool {
+    (20..=512).contains(&value.len()) && value.bytes().all(|c| c.is_ascii_graphic())
 }
-
+fn read_account() -> Option<Value> {
+    crate::platform::credential("read", ACCOUNT, None).ok()
+        .filter(|v| v["token"].as_str().is_some_and(valid_secret))
+        .filter(|v| v["expiresAt"].as_u64().is_none_or(|time| time > fleqi_core::now_ms()))
+        .map(|v| json!({"loggedIn":true,"login":v["login"],"name":v["name"],"avatarUrl":v["avatarUrl"],"htmlUrl":v["htmlUrl"]}))
+}
 pub fn status() -> Value {
-    let account = stored()
-        .filter(|value| value.get("token").and_then(Value::as_str).is_some())
-        .map(|value| {
-            json!({
-                "loggedIn": true,
-                "login": value.get("login").cloned().unwrap_or(Value::Null),
-                "name": value.get("name").cloned().unwrap_or(Value::Null),
-                "avatarUrl": value.get("avatarUrl").cloned().unwrap_or(Value::Null),
-                "htmlUrl": value.get("htmlUrl").cloned().unwrap_or(Value::Null),
-            })
-        });
-    json!({
-        "configured": configured(),
-        "mode": mode(),
-        "account": account.unwrap_or(Value::Null),
-    })
+    json!({"configured":configured(),"mode":"browser","account":read_account(),
+        "flow":FLOW.lock().ok().and_then(|v| v.as_ref().map(Flow::public))})
 }
-
-/// 访问令牌只写入系统凭据存储；除登录名与头像外不落盘、不进日志。
-fn store(token: &str, account: &Value) -> Result<(), String> {
-    crate::platform::credential(
-        "write",
-        ACCOUNT,
-        Some(json!({
-            "token": token,
-            "login": account["login"],
-            "name": account["name"],
-            "avatarUrl": account["avatarUrl"],
-            "htmlUrl": account["htmlUrl"],
-        })),
-    )
-    .map(|_| ())
-    .map_err(|e| e.to_string())
+pub fn login_poll(id: &str) -> Result<Value, String> {
+    FLOW.lock()
+        .map_err(|_| "登录状态不可用")?
+        .as_ref()
+        .filter(|flow| flow.id == id)
+        .map(Flow::public)
+        .ok_or_else(|| "登录请求已失效，请重试".into())
 }
-
-pub fn logout() -> Result<(), String> {
-    if let Ok(mut flow) = FLOW.lock() {
-        *flow = None;
+fn close_browser(id: &str) {
+    #[cfg(target_os = "macos")]
+    let _ = crate::platform::host_call(json!({"operation":"github_auth_close","flowId":id}));
+    #[cfg(not(target_os = "macos"))]
+    let _ = id;
+}
+fn open_browser(app: &tauri::AppHandle, id: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = app;
+        crate::platform::host_call(json!({"operation":"github_auth_open","flowId":id}))
+            .map(|_| ())
+            .map_err(|error| error.to_string())
     }
-    crate::platform::credential("delete", ACCOUNT, None).map_err(|e| e.to_string())?;
+    #[cfg(not(target_os = "macos"))]
+    {
+        use tauri_plugin_opener::OpenerExt;
+        let _ = id;
+        app.opener()
+            .open_url(VERIFY_URL, None::<&str>)
+            .map_err(|_| "无法打开 GitHub 登录页面".into())
+    }
+}
+fn browser_closed(id: &str) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        crate::platform::host_call(json!({"operation":"github_auth_status","flowId":id}))
+            .ok()
+            .is_some_and(|v| v["open"] == false)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = id;
+        false
+    }
+}
+fn finish(app: &tauri::AppHandle, id: &str, phase: Phase, message: Option<String>) {
+    let changed = if let Ok(mut slot) = FLOW.lock() {
+        if let Some(flow) = slot
+            .as_mut()
+            .filter(|f| f.id == id && matches!(f.phase, Phase::Starting | Phase::Waiting))
+        {
+            flow.finish(phase, message);
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+    if changed {
+        close_browser(id);
+        crate::runtime::changed(app);
+    }
+}
+pub fn login_cancel(app: &tauri::AppHandle, id: &str) {
+    finish(app, id, Phase::Cancelled, None);
+}
+pub fn logout(app: &tauri::AppHandle) -> Result<(), String> {
+    let id = {
+        let mut slot = FLOW.lock().map_err(|_| "登录状态不可用")?;
+        // 与授权落盘使用同一把锁，退出后旧请求不能重新写入凭据。
+        crate::platform::credential("delete", ACCOUNT, None).map_err(|e| e.to_string())?;
+        slot.take().map(|f| f.id)
+    };
+    if let Some(id) = id {
+        close_browser(&id);
+    }
+    crate::runtime::changed(app);
     Ok(())
 }
 
-/// 第一步：向 GitHub 申请设备码，并把用户送去输入设备码的页面。
-pub async fn login_start(app: &tauri::AppHandle) -> Result<Value, String> {
-    use tauri_plugin_opener::OpenerExt;
+pub fn login_start(app: &tauri::AppHandle, id: String) -> Result<Value, String> {
     if !configured() {
-        return Err("尚未配置 GitHub OAuth 应用，请先按文档创建并填写客户端 ID。".into());
+        return Err("此版本尚未启用 GitHub 登录，请稍后重试".into());
     }
-    let url = allowed(DEVICE_CODE_URL, &["github.com"])?;
-    let response = client()?
-        .post(url)
-        .header(reqwest::header::ACCEPT, "application/json")
-        .form(&[("client_id", CLIENT_ID), ("scope", SCOPE)])
-        .send()
-        .await
-        .map_err(|error| format!("无法连接 GitHub：{error}"))?;
+    uuid::Uuid::parse_str(&id).map_err(|_| "登录请求无效")?;
+    let public = {
+        let mut slot = FLOW.lock().map_err(|_| "登录状态不可用")?;
+        if slot.as_ref().is_some_and(|f| f.active(&f.id)) {
+            return Err("已有 GitHub 登录正在进行，请先完成或取消".into());
+        }
+        let flow = Flow::new(id.clone());
+        let public = flow.public();
+        *slot = Some(flow);
+        public
+    };
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = authorize(&app, &id).await {
+            finish(&app, &id, Phase::Failed, Some(error));
+        }
+    });
+    Ok(public)
+}
+
+fn device_response(body: &Value) -> Result<(String, String, u64, u64), String> {
+    if body["error"] == "device_flow_disabled" {
+        return Err("GitHub 登录暂不可用，请联系应用维护者".into());
+    }
+    let device = body["device_code"]
+        .as_str()
+        .filter(|v| valid_secret(v))
+        .ok_or("GitHub 未返回有效授权信息")?;
+    let user = body["user_code"]
+        .as_str()
+        .filter(|v| {
+            v.len() == 9
+                && v.as_bytes()[4] == b'-'
+                && v.bytes()
+                    .enumerate()
+                    .all(|(i, c)| i == 4 || c.is_ascii_uppercase() || c.is_ascii_digit())
+        })
+        .ok_or("GitHub 未返回有效验证码")?;
+    if body["verification_uri"].as_str() != Some(VERIFY_URL) {
+        return Err("GitHub 授权地址无效".into());
+    }
+    let interval = body["interval"].as_u64().unwrap_or(5);
+    let expires = body["expires_in"]
+        .as_u64()
+        .ok_or("GitHub 未返回授权有效期")?;
+    if !(1..=3600).contains(&interval) || !(1..=3600).contains(&expires) {
+        return Err("GitHub 授权有效期无效".into());
+    }
+    Ok((device.into(), user.into(), interval, expires))
+}
+async fn body(response: reqwest::Response) -> Result<Value, String> {
     if !response.status().is_success() {
         return Err(format!(
-            "GitHub 拒绝了设备码请求（HTTP {}）",
+            "GitHub 请求失败（HTTP {}），请稍后重试",
             response.status()
         ));
     }
-    let body: Value = response.json().await.map_err(|e| e.to_string())?;
-    let device_code = body["device_code"]
-        .as_str()
-        .ok_or("GitHub 未返回设备码")?
-        .to_string();
-    let user_code = body["user_code"].as_str().unwrap_or("").to_string();
-    let verification = body["verification_uri"]
-        .as_str()
-        .unwrap_or(VERIFY_URL)
-        .to_string();
-    let interval = body["interval"].as_u64().unwrap_or(5).clamp(1, 60);
-    let expires = body["expires_in"].as_u64().unwrap_or(900).clamp(60, 3600);
-    if let Ok(mut flow) = FLOW.lock() {
-        *flow = Some(Flow {
-            device_code,
-            interval,
-            expires_at: Instant::now() + Duration::from_secs(expires),
-        });
-    }
-    if let Ok(url) = allowed(&verification, &["github.com"]) {
-        let _ = app.opener().open_url(url.to_string(), None::<&str>);
-    }
-    Ok(json!({
-        "userCode": user_code,
-        "verificationUri": verification,
-        "interval": interval,
-        "expiresIn": expires,
-    }))
+    response
+        .json()
+        .await
+        .map_err(|_| "GitHub 响应无法读取".into())
 }
-
-/// 第二步：轮询授权结果。待授权时返回 pending，授权成功后写入系统凭据存储。
-pub async fn login_poll() -> Result<Value, String> {
-    let flow = FLOW
-        .lock()
-        .map_err(|_| "登录状态不可用")?
-        .as_ref()
-        .map(|flow| (flow.device_code.clone(), flow.interval, flow.expires_at));
-    let Some((device_code, interval, expires_at)) = flow else {
-        return Err("请先开始 GitHub 登录".into());
-    };
-    if Instant::now() >= expires_at {
-        if let Ok(mut flow) = FLOW.lock() {
-            *flow = None;
-        }
-        return Err("设备码已过期，请重新发起登录".into());
-    }
-    let url = allowed(TOKEN_URL, &["github.com"])?;
-    let response = client()?
-        .post(url)
+async fn authorize(app: &tauri::AppHandle, id: &str) -> Result<(), String> {
+    let client = client()?;
+    let requested_at = Instant::now();
+    let response = client
+        .post(allowed(DEVICE_CODE_URL, &["github.com"])?)
         .header(reqwest::header::ACCEPT, "application/json")
-        .form(&[
-            ("client_id", CLIENT_ID),
-            ("device_code", device_code.as_str()),
-            ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-        ])
+        .form(&[("client_id", CLIENT_ID)])
         .send()
         .await
-        .map_err(|error| format!("无法连接 GitHub：{error}"))?;
-    let body: Value = response.json().await.map_err(|e| e.to_string())?;
-    if let Some(token) = body["access_token"].as_str() {
-        let account = fetch_account(token).await?;
-        store(token, &account)?;
-        if let Ok(mut flow) = FLOW.lock() {
-            *flow = None;
-        }
-        return Ok(json!({"status": "authorized", "login": account["login"]}));
-    }
-    match body["error"].as_str().unwrap_or("") {
-        "authorization_pending" => Ok(json!({"status": "pending", "interval": interval})),
-        "slow_down" => Ok(json!({"status": "pending", "interval": (interval + 5).min(60)})),
-        "access_denied" => {
-            if let Ok(mut flow) = FLOW.lock() {
-                *flow = None;
-            }
-            Err("已在 GitHub 取消授权".into())
-        }
-        "expired_token" => {
-            if let Ok(mut flow) = FLOW.lock() {
-                *flow = None;
-            }
-            Err("设备码已过期，请重新发起登录".into())
-        }
-        _ => Err(format!(
-            "GitHub 登录失败：{}",
-            body["error_description"].as_str().unwrap_or("未知错误")
-        )),
-    }
-}
-
-async fn fetch_account(token: &str) -> Result<Value, String> {
-    let url = allowed(USER_URL, &["api.github.com"])?;
-    let response = client()?
-        .get(url)
-        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
-        .bearer_auth(token)
-        .send()
-        .await
-        .map_err(|error| format!("无法读取 GitHub 账号：{error}"))?;
-    if !response.status().is_success() {
-        return Err(format!("GitHub 账号读取失败（HTTP {}）", response.status()));
-    }
-    let body: Value = response.json().await.map_err(|e| e.to_string())?;
-    Ok(json!({
-        "login": body["login"].as_str().unwrap_or(""),
-        "name": body["name"].as_str().unwrap_or(""),
-        "avatarUrl": body["avatar_url"].as_str().unwrap_or(""),
-        "htmlUrl": body["html_url"].as_str().unwrap_or(""),
-    }))
-}
-
-/// 备用登录：直接用个人访问令牌换取账号信息。
-///
-/// 设备码流程需要先在 GitHub 上注册 OAuth 应用并启用 device flow，属于仓库
-/// 管理员的线下动作；在拿到 client id 之前，这条路径让登录功能可以完整跑通。
-/// 令牌同样只进系统凭据存储，且必须先通过一次 api.github.com/user 校验。
-pub async fn login_token(token: &str) -> Result<Value, String> {
-    let token = token.trim();
-    if token.len() < 20
-        || token.len() > 255
-        || token.chars().any(|c| c.is_control() || c.is_whitespace())
+        .map_err(|_| "无法连接 GitHub，请检查网络后重试")?;
+    let (device_code, user_code, interval, expires) = device_response(&body(response).await?)?;
     {
-        return Err("令牌格式不正确：请粘贴 GitHub 生成的完整令牌".into());
+        let mut slot = FLOW.lock().map_err(|_| "登录状态不可用")?;
+        let Some(flow) = slot.as_mut().filter(|f| f.active(id)) else {
+            return Ok(());
+        };
+        flow.device_code = device_code;
+        flow.user_code = user_code;
+        flow.interval = interval;
+        flow.expires_at = requested_at + Duration::from_secs(expires);
+        flow.expires_at_ms = fleqi_core::now_ms()
+            + flow
+                .expires_at
+                .saturating_duration_since(Instant::now())
+                .as_millis() as u64;
+        if Instant::now() >= flow.expires_at {
+            return Err("GitHub 登录已过期，请重试".into());
+        }
+        open_browser(app, id)?;
+        flow.phase = Phase::Waiting;
     }
-    let account = fetch_account(token).await?;
-    if account["login"].as_str().unwrap_or("").is_empty() {
-        return Err("该令牌无法读取账号信息，请确认令牌未被撤销且包含 read:user 权限".into());
+    crate::runtime::changed(app);
+    loop {
+        let Some((interval, expires_at)) = FLOW
+            .lock()
+            .map_err(|_| "登录状态不可用")?
+            .as_ref()
+            .filter(|f| f.id == id && f.phase == Phase::Waiting)
+            .map(|f| (f.interval, f.expires_at))
+        else {
+            return Ok(());
+        };
+        tokio::time::sleep(
+            Duration::from_secs(interval).min(expires_at.saturating_duration_since(Instant::now())),
+        )
+        .await;
+        if Instant::now() >= expires_at {
+            finish(app, id, Phase::Expired, Some("登录已过期，请重试".into()));
+            return Ok(());
+        }
+        let Some(code) = FLOW
+            .lock()
+            .map_err(|_| "登录状态不可用")?
+            .as_ref()
+            .filter(|f| f.active(id))
+            .map(|f| f.device_code.clone())
+        else {
+            return Ok(());
+        };
+        if browser_closed(id) {
+            finish(app, id, Phase::Cancelled, None);
+            return Ok(());
+        }
+        let response = client
+            .post(allowed(TOKEN_URL, &["github.com"])?)
+            .header(reqwest::header::ACCEPT, "application/json")
+            .form(&[
+                ("client_id", CLIENT_ID),
+                ("device_code", code.as_str()),
+                ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
+            ])
+            .send()
+            .await
+            .map_err(|_| "无法连接 GitHub，请检查网络后重试")?;
+        let value = body(response).await?;
+        if let Some(token) = value["access_token"].as_str() {
+            if !valid_secret(token) || value["token_type"].as_str() != Some("bearer") {
+                return Err("GitHub 返回的登录信息无效".into());
+            }
+            let token_expiry = value["expires_in"]
+                .as_u64()
+                .filter(|seconds| *seconds > 0 && *seconds <= 31_536_000)
+                .map(|seconds| fleqi_core::now_ms() + seconds * 1000);
+            if value.get("expires_in").is_some() && token_expiry.is_none() {
+                return Err("GitHub 返回的登录有效期无效".into());
+            }
+            let response = client
+                .get(allowed(USER_URL, &["api.github.com"])?)
+                .header(reqwest::header::ACCEPT, "application/vnd.github+json")
+                .bearer_auth(token)
+                .send()
+                .await
+                .map_err(|_| "无法读取 GitHub 账号，请重试")?;
+            let account = body(response).await?;
+            let login = account["login"]
+                .as_str()
+                .filter(|v| {
+                    !v.is_empty()
+                        && v.len() <= 39
+                        && v.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-')
+                })
+                .ok_or("GitHub 账号信息无效")?;
+            {
+                let mut slot = FLOW.lock().map_err(|_| "登录状态不可用")?;
+                let Some(flow) = slot.as_mut().filter(|f| f.active(id)) else {
+                    drop(slot);
+                    finish(app, id, Phase::Expired, Some("登录已过期，请重试".into()));
+                    return Ok(());
+                };
+                crate::platform::credential("write",ACCOUNT,Some(json!({"token":token,"login":login,"name":account["name"],
+                    "avatarUrl":account["avatar_url"],"htmlUrl":account["html_url"],"expiresAt":token_expiry,"source":"github-app"})))
+                    .map_err(|e| e.to_string())?;
+                flow.finish(Phase::Authorized, None);
+            }
+            close_browser(id);
+            crate::runtime::changed(app);
+            return Ok(());
+        }
+        match value["error"].as_str().unwrap_or("") {
+            "authorization_pending" => {}
+            "slow_down" => {
+                let mut slot = FLOW.lock().map_err(|_| "登录状态不可用")?;
+                if let Some(flow) = slot.as_mut().filter(|f| f.active(id)) {
+                    flow.interval = value["interval"]
+                        .as_u64()
+                        .unwrap_or(0)
+                        .max(flow.interval.saturating_add(5));
+                }
+            }
+            "access_denied" => {
+                finish(app, id, Phase::Cancelled, None);
+                return Ok(());
+            }
+            "expired_token" => {
+                finish(app, id, Phase::Expired, Some("登录已过期，请重试".into()));
+                return Ok(());
+            }
+            _ => return Err("GitHub 未能完成授权，请重新登录".into()),
+        }
     }
-    store(token, &account)?;
-    Ok(json!({"status": "authorized", "login": account["login"]}))
 }
 
-/// 在浏览器打开令牌创建页（预填 read:user），省去用户自己找入口。
-pub fn open_tokens(app: &tauri::AppHandle) -> Result<(), String> {
-    use tauri_plugin_opener::OpenerExt;
-    let url = allowed(TOKENS_URL, &["github.com"])?;
-    app.opener()
-        .open_url(url.to_string(), None::<&str>)
-        .map_err(|error| format!("无法打开浏览器：{error}"))
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn rejects_foreign_hosts_credentials_ports_and_fragments() {
+        for url in [
+            "http://github.com/login/device",
+            "https://github.com.evil.test/login/device",
+            "https://github.com@evil.test/",
+            "https://user:secret@github.com/",
+            "https://github.com:444/",
+            "https://github.com/#token",
+        ] {
+            assert!(allowed(url, &["github.com"]).is_err());
+        }
+        assert!(allowed(VERIFY_URL, &["github.com"]).is_ok());
+    }
+    #[test]
+    fn validates_device_response_without_extending_expiry() {
+        let mut response = json!({"device_code":"fixture-device-code-01234567890123456789","user_code":"ABCD-1234","verification_uri":VERIFY_URL,"interval":5,"expires_in":1});
+        assert_eq!(device_response(&response).unwrap().3, 1);
+        response["verification_uri"] = json!("https://evil.test/");
+        assert!(device_response(&response).is_err());
+        response["verification_uri"] = json!(VERIFY_URL);
+        response["expires_in"] = json!(0);
+        assert!(device_response(&response).is_err());
+    }
+    #[test]
+    fn cancelled_superseded_and_expired_sessions_cannot_accept_credentials() {
+        let mut flow = Flow::new("session-a".into());
+        assert!(flow.active("session-a"));
+        assert!(!flow.active("session-b"));
+        flow.device_code = "private-device-code".into();
+        assert!(!flow.public().to_string().contains("private-device-code"));
+        flow.finish(Phase::Cancelled, None);
+        assert!(!flow.active("session-a"));
+        assert!(flow.device_code.is_empty());
+        let mut flow = Flow::new("session-a".into());
+        flow.expires_at = Instant::now();
+        assert!(!flow.active("session-a"));
+    }
 }

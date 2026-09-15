@@ -16,7 +16,8 @@ export interface Interaction { id:string; kind:string; message:string; taskId:st
 export interface AuthState { type:string; url?:string; instructions?:string; message?:string; userCode?:string; verificationUri?:string }
 /** GitHub 账号状态：令牌只保存在系统凭据存储，界面只拿展示用字段。 */
 export interface GithubAccount { loggedIn:boolean; login?:string; name?:string; avatarUrl?:string; htmlUrl?:string }
-export interface GithubState { configured:boolean; mode:'device'|'token'; account:GithubAccount|null }
+export interface GithubFlow { id:string; status:'starting'|'waiting'|'authorized'|'cancelled'|'expired'|'failed'; userCode:string; expiresAt:number; message:string|null }
+export interface GithubState { configured:boolean; mode:'browser'; account:GithubAccount|null; flow?:GithubFlow|null }
 export interface UpdateState { configured:boolean; repository:string|null; channel:'stable'|'beta'; currentVersion:string }
 export interface UpdateInfo { available:boolean; version?:string; currentVersion?:string; notes?:string; date?:string }
 export interface ActionRecord { id:string; operation:string; status:string; arguments:Record<string,unknown>; result:{outputs?:string[];message?:string;verified?:boolean}|null }
@@ -42,7 +43,7 @@ const previewKey='fleqi.dashboard.preview.v1';
 const defaults:SettingsSnapshot={revision:0,appearance:readAppearance(),launchAtLogin:false,barEnabled:true,activation:'manual',shortcut:'Control+Alt+Space',defaultProfileId:null,outputDirectory:null,conflictPolicy:'rename',bubbleSeconds:6.0};
 function previewSnapshot():Snapshot {
   let settings=defaults;try{const saved=JSON.parse(localStorage.getItem(previewKey)??'null');if(saved?.appearance)settings={...defaults,...saved};}catch{/* Preview remains usable without storage. */}
-  return {settings,profiles:[],permissions:[],platform:{platform:'browser',hostName:'Finder',hostAttachment:false,tray:false,credentialStore:false,detail:'浏览器预览；原生功能请在 Fleqi 应用中使用。'},runtime:{ready:false,node:'24.21.0',pi:'0.85.0',app:'0.0.1'},engines:[],tasks:[],context:null,interactions:[],auth:null,github:{configured:false,mode:'token',account:null},update:{configured:false,repository:null,channel:'stable',currentVersion:'0.0.1'},activeTaskId:null,native:false};
+  return {settings,profiles:[],permissions:[],platform:{platform:'browser',hostName:'Finder',hostAttachment:false,tray:false,credentialStore:false,detail:'浏览器预览；原生功能请在 Fleqi 应用中使用。'},runtime:{ready:false,node:'24.21.0',pi:'0.85.0',app:'0.0.1'},engines:[],tasks:[],context:null,interactions:[],auth:null,github:{configured:false,mode:'browser',account:null},update:{configured:false,repository:null,channel:'stable',currentVersion:'0.0.1'},activeTaskId:null,native:false};
 }
 export async function backend<T>(command:string,args?:Record<string,unknown>):Promise<T> {
   if(nativeHost)return invoke<T>(command,args);

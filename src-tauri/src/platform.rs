@@ -211,16 +211,6 @@ pub mod probes {
         }
         Some(item)
     }
-
-    /// 快照时的静默自动检查：完全磁盘访问探测无副作用，始终执行；文件与
-    /// 文件夹只在上一结果为已授权时复核（撤销后系统静默拒绝，不会弹窗），
-    /// 避免每次启动都对未授权目录弹出系统请求。
-    pub fn auto() {
-        run("full_disk");
-        if stored().files.is_some_and(|item| item.status == "granted") {
-            run("files");
-        }
-    }
 }
 #[cfg(target_os = "macos")]
 pub fn run_probe(id: &str) -> Option<PermissionItem> {
@@ -230,18 +220,12 @@ pub fn run_probe(id: &str) -> Option<PermissionItem> {
 pub fn init_probe_store(path: std::path::PathBuf) {
     probes::init_store(path)
 }
-#[cfg(target_os = "macos")]
-pub fn auto_probe_permissions() {
-    probes::auto()
-}
 #[cfg(not(target_os = "macos"))]
 pub fn run_probe(_id: &str) -> Option<PermissionItem> {
     None
 }
 #[cfg(not(target_os = "macos"))]
 pub fn init_probe_store(_path: std::path::PathBuf) {}
-#[cfg(not(target_os = "macos"))]
-pub fn auto_probe_permissions() {}
 
 #[cfg(target_os = "macos")]
 mod macos {

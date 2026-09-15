@@ -55,7 +55,7 @@ pub async fn app_snapshot(state: State<'_, AppState>) -> Reply<Value> {
         let mut engines=vec![EngineInfo{id:"files".into(),name:"基础文件 / ZIP / 图片 / 文档".into(),ready:true,version:format!("Fleqi Core {}",env!("CARGO_PKG_VERSION")),formats:"文件操作、ZIP、PNG / JPG / WebP、TXT / Markdown / 简单 DOCX".into()}];
         for (id,name,path,formats) in [("ffmpeg","FFmpeg",&state.0.engines.ffmpeg,"MP3 / M4A / WAV / MP4"),("ffprobe","ffprobe",&state.0.engines.ffprobe,"音视频格式与时长核验"),("qpdf","qpdf",&state.0.engines.qpdf,"普通未加密 PDF")]{engines.push(EngineInfo{id:id.into(),name:name.into(),ready:path.as_ref().is_some_and(|p|p.is_file()),version:if path.is_some(){"随应用提供".into()}else{"尚未打包".into()},formats:formats.into()});}
         let node=state.0.resources.join("bin").join(if cfg!(windows){"node.exe"}else{"node"});
-        platform::auto_probe_permissions();
+        // 快照读取上次探测结果；目录访问可能等待系统授权，必须由用户主动检查。
         let context=state.0.context.lock().map_err(|_|"上下文不可用")?.clone();
         Ok(json!({"settings":state.0.db.settings().map_err(|e|e.to_string())?,"profiles":profiles,"permissions":NativeHost.permissions().map_err(|e|e.to_string())?,"platform":NativeHost.capabilities(),"runtime":{"ready":node.is_file()&&state.0.pi_dir.join("entry.mjs").is_file(),"node":"24.21.0","pi":"0.85.0","app":env!("CARGO_PKG_VERSION")},"engines":engines,"tasks":state.0.db.tasks(100).map_err(|e|e.to_string())?,"context":context,"interactions":state.interaction_list(),"auth":state.0.auth.lock().ok().and_then(|v|v.clone()),"github":crate::github::status(),"update":crate::update::info(),"activeTaskId":state.active_id(),"native":true}))
     }).await.map_err(|e|e.to_string())?
@@ -388,28 +388,21 @@ pub async fn github_status() -> Reply<Value> {
     Ok(crate::github::status())
 }
 #[tauri::command]
-pub async fn github_login_start(app: AppHandle) -> Reply<Value> {
-    crate::github::login_start(&app).await
+pub async fn github_login_start(app: AppHandle, flow_id: String) -> Reply<Value> {
+    crate::github::login_start(&app, flow_id)
 }
 #[tauri::command]
-pub async fn github_login_poll(app: AppHandle) -> Reply<Value> {
-    let result = crate::github::login_poll().await?;
-    runtime::changed(&app);
-    Ok(result)
+pub async fn github_login_poll(flow_id: String) -> Reply<Value> {
+    crate::github::login_poll(&flow_id)
 }
 #[tauri::command]
-pub async fn github_login_token(app: AppHandle, token: String) -> Reply<Value> {
-    let result = crate::github::login_token(&token).await?;
-    runtime::changed(&app);
-    Ok(result)
-}
-#[tauri::command]
-pub async fn github_open_tokens(app: AppHandle) -> Reply<()> {
-    crate::github::open_tokens(&app)
+pub async fn github_login_cancel(app: AppHandle, flow_id: String) -> Reply<()> {
+    crate::github::login_cancel(&app, &flow_id);
+    Ok(())
 }
 #[tauri::command]
 pub async fn github_logout(app: AppHandle) -> Reply<()> {
-    crate::github::logout()?;
+    crate::github::logout(&app)?;
     runtime::changed(&app);
     Ok(())
 }

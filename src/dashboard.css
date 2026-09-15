@@ -157,18 +157,6 @@ html[data-surface='settings'],html[data-surface='settings'] body,html[data-surfa
 .task-strip>div {flex:1;min-width:0;}.task-strip strong {font-size:11px;font-weight:500;}.task-strip p {margin:5px 0 0;line-height:1.6;max-height:75px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;}
 .task-strip button,.live-context button,.bar-notice button {margin-left:auto;white-space:nowrap;color:var(--bar-secondary);}
 .task-strip progress {width:100%;height:4px;accent-color:#737373;}.live-context {font-size:10px;padding-block:7px;}.bar-notice {border-bottom:1px solid var(--field-border);}.bar-loading {font-size:12px;padding:10px 20px;background:#fafafa;color:#525252;}
-.agent-bubble {position:relative;margin:6px 8px 10px;padding:11px 16px;border-radius:16px;background:#1d1d20;backdrop-filter:none;color:#f5f5f7;font-size:12px;box-shadow:0 1px 4px #00000033;}
-.agent-bubble::before {content:'';position:absolute;top:-4.5px;left:30px;width:11px;height:11px;border-radius:2px;background:#1d1d20;transform:rotate(45deg);}
-/* 气泡在底栏上方时，尾巴朝下指向底栏。 */
-.agent-bubble.above {margin:10px 8px 6px;}
-.agent-bubble.above::before {top:auto;bottom:-4.5px;}
-.agent-bubble strong {display:flex;align-items:center;gap:7px;font-size:11px;font-weight:500;color:#b9b9c0;}
-.agent-bubble p {margin:7px 0 0;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;max-height:170px;overflow:auto;scrollbar-width:thin;}
-.agent-bubble .status-dot {flex-shrink:0;}
-.agent-bubble .interaction-card {margin:0;padding:0;background:transparent;color:#f5f5f7;box-shadow:none;border:none;}
-.agent-bubble .interaction-card .section-kicker {color:#9a9aa0;background:none;border:none;padding:0;margin:0;display:inline-block;}
-.agent-bubble .interaction-card .button-row button {background:#2c2c30;color:#f5f5f7;border:1px solid #3a3a3f;}
-.agent-bubble .interaction-card .button-row button:hover {background:#3a3a40;}
 .status-badge {display:inline-flex;align-items:center;gap:5px;padding-block:3px;}
 .svg-image {display:inline-block;pointer-events:none;}
 .send-button.reply {width:auto;min-width:52px;padding-inline:12px;border-radius:18px;background:#1d1d20;color:#f5f5f7;}
